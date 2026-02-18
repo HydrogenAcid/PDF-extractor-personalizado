@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extractor PDF</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+<style>
+:root {
+  --primary: #4f46e5;
+  --secondary: #6366f1;
+  --bg: #f9fafb;
+  --card: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --shadow: rgba(0,0,0,0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  padding: 2rem;
+}
+
+h1, h2 {
+  margin-bottom: 1rem;
+}
+
+h1 {
+  color: var(--primary);
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: var(--secondary);
+}
+
+form {
+  background: var(--card);
+  padding: 2rem;
+  border-radius: 1rem;
+  max-width: 400px;
+  box-shadow: 0 4px 12px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+input[type="file"] {
+  padding: 0.5rem;
+}
+
+input[type="text"], input[type="number"] {
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  width: 100%;
+}
+
+input[type="checkbox"] {
+  margin-right: 0.5rem;
+}
+
+button {
+  background: var(--primary);
+  color: white;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.3s;
+}
+
+button:hover {
+  background: var(--secondary);
+}
+
+canvas {
+  background: var(--card);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 4px 12px var(--shadow);
+  width: 100% !important;
+  max-width: 800px;
+}
+
+#graph {
+  height: 500px;
+  border: 1px solid #d1d5db;
+  border-radius: 1rem;
+  margin-top: 1rem;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+pre#pages {
+  background: var(--card);
+  padding: 1rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 12px var(--shadow);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: var(--text);
+}
+</style>
+</head>
+
+<body>
+
+<h1>Extractor PDF</h1>
+
+<form id="form">
+  <input type="file" name="pdf" required>
+  
+  <label>Inicio <input type="number" name="start" value="1"></label>
+  <label>Fin <input type="number" name="end" value="2"></label>
+  
+  <label><input type="checkbox" name="ocr"> OCR</label>
+  <label><input type="checkbox" name="two"> 2 columnas</label>
+  
+  <button>Procesar</button>
+</form>
+
+<h2>Top palabras</h2>
+<canvas id="topChart"></canvas>
+
+<h2>Serie palabras por página</h2>
+<canvas id="serieChart"></canvas>
+
+<h2>Grafo frases</h2>
+<div style="width:100%; max-width:1200px; margin:auto;">
+<div id="graph"></div>
+</div>
+<h2>Páginas</h2>
+<pre id="pages"></pre>
+
+<script>
+document.getElementById("form").onsubmit = async e=>{
+  e.preventDefault();
+  let r = await fetch("/process",{method:"POST",body:new FormData(e.target)});
+  let d = await r.json();
+
+  drawTop(d.top);
+  drawSerie(d.serie);
+  drawGraph(d.edges);
+  document.getElementById("pages").textContent = d.pages.join("\n");
+};
+
+function drawTop(top){
+  new Chart(document.getElementById("topChart"),{
+    type:"bar",
+    data:{
+      labels:top.map(x=>x[0]),
+      datasets:[{label:"Frecuencia",data:top.map(x=>x[1]),backgroundColor: 'rgba(79,70,229,0.7)'}]
+    },
+    options:{responsive:true,plugins:{legend:{display:false}}}
+  });
+}
+
+function drawSerie(s){
+  new Chart(document.getElementById("serieChart"),{
+    type:"line",
+    data:{
+      labels:s.map((_,i)=>"Página "+(i+1)),
+      datasets:[{label:"Palabras",data:s,borderColor: 'rgba(79,70,229,0.8)',fill:false}]
+    },
+    options:{responsive:true}
+  });
+}
+
+function drawGraph(edges){
+  let nodes = [...new Set(edges.flat())].map(x=>({id:x,label:x}));
+  let ed = edges.map(e=>({from:e[0],to:e[1]}));
+  new vis.Network(document.getElementById("graph"),
+    {nodes:new vis.DataSet(nodes),edges:new vis.DataSet(ed)},
+    {physics:true, interaction:{hover:true,zoomView:true,dragView:true}}
+  );
+}
+</script>
+
+</body>
+</html>
