@@ -39,9 +39,9 @@ Para cada libro:
 5. Se grafica en plano log-log.
 6. Se calcula la pendiente usando regresión lineal sobre:
 
-\[
+$\[
 \log(\text{rank}) \quad \text{vs} \quad \log(\text{frequency})
-\]
+\]$
 
 Rango de ajuste actual: 1 a 300.
 
@@ -65,13 +65,12 @@ Para cada libro:
 
 $\[
 H = - \sum_i P(x_i)\log P(x_i)
-\]
-$
+\]$
 donde:
 
-\[
+$\[
 P(x_i) = \frac{f(x_i)}{\sum_j f(x_j)}
-\]
+\]$
 
 La entropía se reporta en nats.
 
