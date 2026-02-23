@@ -1,206 +1,216 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Extractor PDF</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zipf + Shannon (PDF)</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-
-<style>
-:root {
-  --primary: #4f46e5;
-  --secondary: #6366f1;
-  --bg: #f9fafb;
-  --card: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
-  --shadow: rgba(0,0,0,0.1);
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: 'Inter', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.6;
-  padding: 2rem;
-}
-
-h1, h2 {
-  margin-bottom: 1rem;
-}
-
-h1 {
-  color: var(--primary);
-  font-size: 2.5rem;
-  margin-bottom: 2rem;
-}
-
-h2 {
-  font-size: 1.5rem;
-  margin-top: 2rem;
-  margin-bottom: 1rem;
-  color: var(--secondary);
-}
-
-form {
-  background: var(--card);
-  padding: 2rem;
-  border-radius: 1rem;
-  max-width: 400px;
-  box-shadow: 0 4px 12px var(--shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-input[type="file"] {
-  padding: 0.5rem;
-}
-
-input[type="text"], input[type="number"] {
-  padding: 0.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  width: 100%;
-}
-
-input[type="checkbox"] {
-  margin-right: 0.5rem;
-}
-
-button {
-  background: var(--primary);
-  color: white;
-  padding: 0.75rem;
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background 0.3s;
-}
-
-button:hover {
-  background: var(--secondary);
-}
-
-canvas {
-  background: var(--card);
-  border-radius: 1rem;
-  padding: 1rem;
-  box-shadow: 0 4px 12px var(--shadow);
-  width: 100% !important;
-  max-width: 800px;
-}
-
-#graph {
-  height: 500px;
-  border: 1px solid #d1d5db;
-  border-radius: 1rem;
-  margin-top: 1rem;
-  box-shadow: 0 4px 12px var(--shadow);
-}
-
-pre#pages {
-  background: var(--card);
-  padding: 1rem;
-  border-radius: 1rem;
-  box-shadow: 0 4px 12px var(--shadow);
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  color: var(--text);
-}
-</style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-
 <body>
+  <h1>Analizador de PDFs</h1>
 
-<h1>Extractor PDF</h1>
+  <form id="form" class="card">
+    <div class="row">
+      <input type="file" name="pdf" accept="application/pdf" required />
+      <button type="submit">Subir y analizar</button>
+      <button type="button" id="resetBtn" class="secondary">Reset</button>
+    </div>
+    <div class="hint">Sube PDFs uno por uno. Cada PDF se agrega a las gráficas con color distinto.</div>
+  </form>
 
-<form id="form">
-  <input type="file" name="pdf" required>
-  
-  <label>Inicio <input type="number" name="start" value="1"></label>
-  <label>Fin <input type="number" name="end" value="2"></label>
-  
-  <label><input type="checkbox" name="ocr"> OCR</label>
-  <label><input type="checkbox" name="two"> 2 columnas</label>
-  
-  <button>Procesar</button>
-</form>
+  <section class="card">
+    <div class="sectionHeader">
+      <h2>Zipf: Rango vs Frecuencia (log-log)</h2>
+      <div class="small">Pendiente: ajuste lineal en log(rank) vs log(freq) con ranks [1..300]</div>
+    </div>
+    <canvas id="zipfChart"></canvas>
 
-<h2>Top palabras</h2>
-<canvas id="topChart"></canvas>
+    <h3>Tabla (Zipf)</h3>
+    <div class="tableWrap">
+      <table id="zipfTable">
+        <thead>
+          <tr>
+            <th>PDF</th>
+            <th>Páginas</th>
+            <th>Tokens</th>
+            <th>Vocab</th>
+            <th>Zipf slope</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
 
-<h2>Serie palabras por página</h2>
-<canvas id="serieChart"></canvas>
+  <section class="card">
+    <div class="sectionHeader">
+      <h2>Longitud de palabra vs Frecuencia</h2>
+      <div class="small">Distribución por longitudes agregando frecuencias por palabra</div>
+    </div>
+    <canvas id="lenChart"></canvas>
 
-<h2>Grafo frases</h2>
-<div style="width:100%; max-width:1200px; margin:auto;">
-<div id="graph"></div>
-</div>
-<h2>Páginas</h2>
-<pre id="pages"></pre>
+    <h3>Tabla (Longitudes)</h3>
+    <div class="tableWrap">
+      <table id="lenTable">
+        <thead>
+          <tr>
+            <th>PDF</th>
+            <th>Shannon H (nats)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
 
 <script>
-document.getElementById("form").onsubmit = async e=>{
-  e.preventDefault();
-  let r = await fetch("/process",{method:"POST",body:new FormData(e.target)});
-  let d = await r.json();
+  const palette = [
+    "#4f46e5","#ef4444","#10b981","#f59e0b","#06b6d4","#8b5cf6",
+    "#22c55e","#e11d48","#0ea5e9","#a3e635","#f97316","#14b8a6"
+  ];
+  let colorIdx = 0;
 
-  drawTop(d.top);
-  drawSerie(d.serie);
-  drawGraph(d.edges);
-  document.getElementById("pages").textContent = d.pages.join("\n");
-};
+  let zipfChart = null;
+  let lenChart = null;
 
-function drawTop(top){
-  new Chart(document.getElementById("topChart"),{
-    type:"bar",
-    data:{
-      labels:top.map(x=>x[0]),
-      datasets:[{label:"Frecuencia",data:top.map(x=>x[1]),backgroundColor: 'rgba(79,70,229,0.7)'}]
-    },
-    options:{responsive:true,plugins:{legend:{display:false}}}
+  const zipfDatasets = [];
+  const lenDatasets = [];
+
+  function nextColor() {
+    const c = palette[colorIdx % palette.length];
+    colorIdx++;
+    return c;
+  }
+
+  function ensureCharts() {
+    if (!zipfChart) {
+      zipfChart = new Chart(document.getElementById("zipfChart"), {
+        type: "scatter",
+        data: { datasets: zipfDatasets },
+        options: {
+          responsive: true,
+          scales: {
+            x: { type: "logarithmic", title: { display: true, text: "Rango" } },
+            y: { type: "logarithmic", title: { display: true, text: "Frecuencia" } }
+          },
+          plugins: { legend: { position: "bottom" } }
+        }
+      });
+    }
+    if (!lenChart) {
+      lenChart = new Chart(document.getElementById("lenChart"), {
+        type: "line",
+        data: { datasets: lenDatasets },
+        options: {
+          responsive: true,
+          scales: {
+            x: { 
+              type: "linear",
+        min: 1,
+        max: 23,
+        ticks: { stepSize: 1 },
+        title: { display: true, text: "Longitud" }
+            },
+            y: { title: { display: true, text: "Frecuencia" } }
+          },
+          plugins: { legend: { position: "bottom" } },
+          elements: { point: { radius: 2 } }
+        }
+      });
+    }
+  }
+
+  function addZipfRow(d) {
+    const tb = document.querySelector("#zipfTable tbody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(d.name)}</td>
+      <td>${d.meta.pages}</td>
+      <td>${d.meta.tokens}</td>
+      <td>${d.meta.vocab}</td>
+      <td>${fmt(d.zipf.slope)}</td>
+    `;
+    tb.appendChild(tr);
+  }
+
+  function addLenRow(d) {
+    const tb = document.querySelector("#lenTable tbody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(d.name)}</td>
+      <td>${fmt(d.lengths.shannon_entropy_nats)}</td>
+    `;
+    tb.appendChild(tr);
+  }
+
+  function fmt(x) {
+    if (x === null || x === undefined || Number.isNaN(x)) return "-";
+    return Number(x).toFixed(6);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    ensureCharts();
+
+    const fd = new FormData(e.target);
+    const r = await fetch("/process", { method: "POST", body: fd });
+    const d = await r.json();
+    if (d.error) { alert(d.error); return; }
+
+    const color = nextColor();
+
+    // Zipf dataset (scatter con log scales)
+    const zipfPts = d.zipf.ranks.map((rk, i) => ({ x: rk, y: d.zipf.freqs[i] }));
+    zipfDatasets.push({
+      label: d.name,
+      data: zipfPts,
+      showLine: false,
+      pointRadius: 2,
+      borderColor: color,
+      backgroundColor: color
+    });
+
+    // Longitudes dataset (line)
+    const lenPts = d.lengths.x.map((L, i) => ({ x: L, y: d.lengths.freqs[i] }));
+    lenDatasets.push({
+      label: d.name,
+      data: lenPts,
+      borderColor: color,
+      backgroundColor: color,
+      tension: 0.1
+    });
+
+    zipfChart.update();
+    lenChart.update();
+
+    addZipfRow(d);
+    addLenRow(d);
+
+    // limpia el input para poder subir el mismo archivo si quieres
+    e.target.reset();
   });
-}
 
-function drawSerie(s){
-  new Chart(document.getElementById("serieChart"),{
-    type:"line",
-    data:{
-      labels:s.map((_,i)=>"Página "+(i+1)),
-      datasets:[{label:"Palabras",data:s,borderColor: 'rgba(79,70,229,0.8)',fill:false}]
-    },
-    options:{responsive:true}
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    zipfDatasets.length = 0;
+    lenDatasets.length = 0;
+    colorIdx = 0;
+
+    const ztb = document.querySelector("#zipfTable tbody");
+    const ltb = document.querySelector("#lenTable tbody");
+    ztb.innerHTML = "";
+    ltb.innerHTML = "";
+
+    if (zipfChart) zipfChart.update();
+    if (lenChart) lenChart.update();
   });
-}
-
-function drawGraph(edges){
-  let nodes = [...new Set(edges.flat())].map(x=>({id:x,label:x}));
-  let ed = edges.map(e=>({from:e[0],to:e[1]}));
-  new vis.Network(document.getElementById("graph"),
-    {nodes:new vis.DataSet(nodes),edges:new vis.DataSet(ed)},
-    {physics:true, interaction:{hover:true,zoomView:true,dragView:true}}
-  );
-}
 </script>
-
 </body>
 </html>

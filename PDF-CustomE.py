@@ -1,103 +1,178 @@
 from flask import Flask, render_template, request, jsonify
-import pdfplumber, fitz, pytesseract
-from PIL import Image
-import re
+import os, re, math
 from collections import Counter
-import networkx as nx
-import os
+
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
 
 app = Flask(__name__)
 
-# -------- TEXTO --------
-def extract_text(pdf_path, ocr=False, two_columns=False):
+WORD_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+")
+
+# ---------- Extracción robusta (texto -> fallback OCR) ----------
+
+def extract_text_pymupdf_blocks(pdf_path: str):
+    """
+    Usa blocks para ordenar lectura y mejorar PDFs con columnas.
+    """
     pages = []
-
-    if not ocr:
-        with pdfplumber.open(pdf_path) as pdf:
-            for p in pdf.pages:
-                if two_columns:
-                    w = p.width/2
-                    left = p.crop((0,0,w,p.height)).extract_text() or ""
-                    right = p.crop((w,0,p.width,p.height)).extract_text() or ""
-                    pages.append(left + " " + right)
-                else:
-                    pages.append(p.extract_text() or "")
-    else:
-        doc = fitz.open(pdf_path)
-        for page in doc:
-            pix = page.get_pixmap()
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            pages.append(pytesseract.image_to_string(img, lang="spa"))
-
+    doc = fitz.open(pdf_path)
+    for page in doc:
+        blocks = page.get_text("blocks") or []
+        # block: (x0, y0, x1, y1, text, block_no, block_type)
+        blocks = sorted(blocks, key=lambda b: (b[1], b[0]))  # y luego x
+        text = "\n".join((b[4] or "").strip() for b in blocks if (b[4] or "").strip())
+        pages.append(text)
+    doc.close()
     return pages
 
+def extract_text_ocr_tesseract(pdf_path: str):
+    pages = []
+    doc = fitz.open(pdf_path)
+    for page in doc:
+        pix = page.get_pixmap(dpi=200)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        pages.append(pytesseract.image_to_string(img, lang="spa") or "")
+    doc.close()
+    return pages
 
-# -------- FRECUENCIA --------
-def top_words(text, top=15):
-    words = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+", text.lower())
-    freq = Counter(words)
-    return freq.most_common(top)
+def is_text_usable(pages, min_chars_total=500):
+    return len(("".join(pages)).strip()) >= min_chars_total
 
+def extract_text_auto(pdf_path: str):
+    pages = extract_text_pymupdf_blocks(pdf_path)
+    if not is_text_usable(pages):
+        pages = extract_text_ocr_tesseract(pdf_path)
+    return pages
 
-# -------- SERIE --------
-def serie(pages):
-    return [len(re.findall(r"\w+", p)) for p in pages]
+# ---------- Métricas ----------
 
+def tokenize(text: str):
+    return WORD_RE.findall(text.lower())
 
-# -------- GRAFO FRASES --------
-def graph_phrases(text):
-    words = re.findall(r"\w+", text)
-    edges = []
-    for i in range(len(words)-1):
-        edges.append((words[i], words[i+1]))
-    return edges[:40]
+def rank_frequency(counter: Counter, max_rank: int):
+    items = sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))
+    items = items[:max_rank]
+    ranks = list(range(1, len(items) + 1))
+    freqs = [f for _, f in items]
+    return ranks, freqs
 
+def linreg_slope_loglog(ranks, freqs, fit_min_rank: int, fit_max_rank: int):
+    xs, ys = [], []
+    for r, f in zip(ranks, freqs):
+        if r < fit_min_rank or r > fit_max_rank:
+            continue
+        if f <= 0:
+            continue
+        xs.append(math.log(r))
+        ys.append(math.log(f))
+    m = len(xs)
+    if m < 2:
+        return None
 
-# -------- PAGINAS CON LONGITUDES DE PALABRAS --------
-def pages_format_with_lengths(pages):
-    result = []
-    for i, text in enumerate(pages):
-        lengths_list = [len(w) for w in re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+", text)]
-        result.append(f"{text} {{{','.join(map(str,lengths_list))}}} hoja {i+1}")
-    return result
+    mean_x = sum(xs) / m
+    mean_y = sum(ys) / m
+    num = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+    den = sum((x - mean_x) ** 2 for x in xs)
+    if den == 0:
+        return None
+    return num / den
 
+def length_frequency_from_wordfreq(word_freq: Counter, max_len: int = 23):
+    lf = Counter()
+    for w, f in word_freq.items():
+        L = len(w)
+        if 1 <= L <= max_len:
+            lf[L] += f
+
+    xs = list(range(1, max_len + 1))
+    ys = [lf[L] for L in xs]  # rellena 0 si no existe
+    return xs, ys
+
+def shannon_entropy_from_counts(counts):
+    total = sum(counts)
+    if total <= 0:
+        return None
+    h = 0.0
+    for c in counts:
+        if c <= 0:
+            continue
+        p = c / total
+        h -= p * math.log(p)  # nats
+    return h
+
+def downsample_xy(xs, ys, max_points: int):
+    n = len(xs)
+    if n <= max_points:
+        return xs, ys
+    step = max(1, n // max_points)
+    xs2 = xs[::step]
+    ys2 = ys[::step]
+    return xs2, ys2
+
+# ---------- Rutas ----------
 
 @app.route("/")
 def home():
     return render_template("index.html")
 
-
 @app.route("/process", methods=["POST"])
 def process():
-    file = request.files["pdf"]
+    file = request.files.get("pdf")
+    if not file:
+        return jsonify({"error": "No se recibió PDF"}), 400
 
-    # Manejo de campos vacíos
-    start_str = request.form.get("start", "1").strip()
-    end_str = request.form.get("end", "9999").strip()
-    start = int(start_str) if start_str else 1
-    end = int(end_str) if end_str else 9999
-
-    ocr = bool(request.form.get("ocr"))
-    two = bool(request.form.get("two"))
+    # parámetros (fijos, sin UI)
+    max_rank_plot = 4000
+    fit_min_rank = 1
+    fit_max_rank = 300
+    max_points_zipf = 2500
+    max_points_len = 60  # longitudes no suelen ser tantas
 
     temp = "temp.pdf"
     file.save(temp)
 
-    pages = extract_text(temp, ocr, two)
-    pages = pages[start-1:end]
+    try:
+        pages = extract_text_auto(temp)
+        text = " ".join(pages)
 
-    text = " ".join(pages)
+        tokens = tokenize(text)
+        wf = Counter(tokens)
 
-    data = {
-        "serie": serie(pages),
-        "top": top_words(text),
-        "edges": graph_phrases(text),
-        "pages": pages_format_with_lengths(pages)  # <-- Cambiado aquí
-    }
+        ranks, freqs = rank_frequency(wf, max_rank=max_rank_plot)
+        slope = linreg_slope_loglog(ranks, freqs, fit_min_rank, fit_max_rank)
 
-    os.remove(temp)
-    return jsonify(data)
+        lens_x, lens_y = length_frequency_from_wordfreq(wf, max_len=23)
+        shannon_h = shannon_entropy_from_counts(lens_y)
 
+        # downsample para no matar el navegador
+        ranks_ds, freqs_ds = downsample_xy(ranks, freqs, max_points_zipf)
+        lens_x_ds, lens_y_ds = downsample_xy(lens_x, lens_y, max_points_len)
+
+        return jsonify({
+            "name": file.filename or "PDF",
+            "meta": {
+                "pages": len(pages),
+                "tokens": sum(wf.values()),
+                "vocab": len(wf),
+                "fit_min_rank": fit_min_rank,
+                "fit_max_rank": fit_max_rank,
+            },
+            "zipf": {
+                "ranks": ranks_ds,
+                "freqs": freqs_ds,
+                "slope": slope
+            },
+            "lengths": {
+                "x": lens_x_ds,
+                "freqs": lens_y_ds,
+                "shannon_entropy_nats": shannon_h
+            }
+        })
+    finally:
+        if os.path.exists(temp):
+            os.remove(temp)
 
 if __name__ == "__main__":
     app.run(debug=True)
