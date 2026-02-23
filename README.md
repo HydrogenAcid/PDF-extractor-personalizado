@@ -40,7 +40,7 @@ Para cada libro:
 6. Se calcula la pendiente usando regresión lineal sobre:
 
 \[
-$\log(\text{rank}) \quad \text{vs} \quad \log(\text{frequency})$
+\log(\text{rank}) \quad \text{vs} \quad \log(\text{frequency})
 \]
 
 Rango de ajuste actual: 1 a 300.
@@ -64,13 +64,13 @@ Para cada libro:
 - Se calcula la entropía de Shannon:
 
 $\[
-$H = - \sum_i P(x_i)\log P(x_i)$
+H = - \sum_i P(x_i)\log P(x_i)
 \]
 $
 donde:
 
 \[
-$P(x_i) = \frac{f(x_i)}{\sum_j f(x_j)}$
+P(x_i) = \frac{f(x_i)}{\sum_j f(x_j)}
 \]
 
 La entropía se reporta en nats.
@@ -193,6 +193,10 @@ Abrir en navegador:
 http://127.0.0.1:5000
 ```
 
+
+
+
+---
 
 ## Próximas mejoras posibles
 
