@@ -5,3 +5,4 @@ temp.pdf
 *.log
 .DS_Store
 Thumbs.db
+*.pdf
