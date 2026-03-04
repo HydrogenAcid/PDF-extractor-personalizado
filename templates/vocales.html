@@ -1,0 +1,170 @@
+<!-- templates/vocales.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vocales (PDF)</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink active">Vocales</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <h1>Vocales: frecuencia de n-gramas</h1>
+
+    <form id="formV" class="card">
+      <div class="row">
+        <input type="file" name="pdf" accept="application/pdf" required />
+        <select name="lang" id="langSel">
+          <option value="es">Español (sin tildes)</option>
+          <option value="en">Inglés</option>
+          <option value="fr">Francés (y vocal)</option>
+          <option value="de">Alemán (umlauts)</option>
+          <option value="zh_pinyin">Mandarín (pinyin, ü)</option>
+        </select>
+        <button type="submit">Subir y analizar</button>
+        <button type="button" id="resetBtnV" class="secondary">Reset</button>
+      </div>
+      <div class="hint">
+        Sube PDFs (uno por uno) por idioma para comparar: es vs en / fr / de / zh_pinyin.
+        Eje X = n (índice del n-grama). Tooltip muestra el n-grama.
+      </div>
+    </form>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>N-gramas de vocales</h2>
+        <div class="small">X: n (1..k). Y: frecuencia. Hover: n-grama y frecuencia.</div>
+      </div>
+      <canvas id="vowelChart"></canvas>
+
+      <h3>Tabla (Vocales)</h3>
+      <div class="tableWrap">
+        <table id="vowelTable">
+          <thead>
+            <tr>
+              <th>PDF</th>
+              <th>Idioma</th>
+              <th>Páginas</th>
+              <th>Words</th>
+              <th>Vowel chars</th>
+              <th>N-grams total</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+<script>
+  const palette = [
+    "#4f46e5","#ef4444","#10b981","#f59e0b","#06b6d4","#8b5cf6",
+    "#22c55e","#e11d48","#0ea5e9","#a3e635","#f97316","#14b8a6"
+  ];
+  let colorIdx = 0;
+  let vowelChart = null;
+  const vowelDatasets = [];
+
+  function nextColor() {
+    const c = palette[colorIdx % palette.length];
+    colorIdx++;
+    return c;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  function ensureChart() {
+    if (vowelChart) return;
+
+    vowelChart = new Chart(document.getElementById("vowelChart"), {
+      type: "line",
+      data: { datasets: vowelDatasets },
+      options: {
+        responsive: true,
+        scales: {
+          x: {
+            type: "linear",
+            ticks: { stepSize: 1 },
+            title: { display: true, text: "n (índice del n-grama)" }
+          },
+          y: { title: { display: true, text: "Frecuencia" } }
+        },
+        plugins: {
+          legend: { position: "bottom" },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const p = ctx.raw; // {x,y,gram}
+                return `${p.gram} — n=${p.x}, freq=${p.y}`;
+              }
+            }
+          }
+        },
+        elements: { point: { radius: 2 } }
+      }
+    });
+  }
+
+  function addRow(d) {
+    const tb = document.querySelector("#vowelTable tbody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(d.name)}</td>
+      <td>${escapeHtml(d.lang)}</td>
+      <td>${d.pages}</td>
+      <td>${d.meta.words}</td>
+      <td>${d.meta.vowel_chars}</td>
+      <td>${d.meta.ngrams_total}</td>
+    `;
+    tb.appendChild(tr);
+  }
+
+  document.getElementById("formV").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    ensureChart();
+
+    const fd = new FormData(e.target);
+    const r = await fetch("/process_vowels", { method: "POST", body: fd });
+    const d = await r.json();
+    if (d.error) { alert(d.error); return; }
+
+    const color = nextColor();
+    const pts = d.x.map((n, i) => ({ x: n, y: d.freqs[i], gram: d.grams[i] }));
+
+    vowelDatasets.push({
+      label: `${d.lang}: ${d.name}`,
+      data: pts,
+      borderColor: color,
+      backgroundColor: color,
+      tension: 0.1
+    });
+
+    vowelChart.update();
+    addRow(d);
+    e.target.reset();
+  });
+
+  document.getElementById("resetBtnV").addEventListener("click", () => {
+    vowelDatasets.length = 0;
+    colorIdx = 0;
+    document.querySelector("#vowelTable tbody").innerHTML = "";
+    if (vowelChart) vowelChart.update();
+  });
+</script>
+</body>
+</html>

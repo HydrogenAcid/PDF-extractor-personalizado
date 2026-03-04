@@ -106,3 +106,54 @@ th, td{
 thead th{
   background: #f3f4f6;
 }
+/* ---- Layout con sidebar ---- */
+.layout{
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.sidebar{
+  position: sticky;
+  top: 18px;
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: 0 8px 22px var(--shadow);
+  padding: 14px;
+  height: calc(100vh - 36px);
+}
+
+.brand{
+  font-weight: 900;
+  color: var(--primary);
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.nav{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.navLink{
+  display: block;
+  padding: 10px 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  border: 1px solid var(--border);
+  background: white;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.navLink.active{
+  border-color: var(--primary);
+  box-shadow: 0 6px 16px var(--shadow);
+}
+
+.main{
+  min-width: 0;
+}

@@ -9,7 +9,17 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
+<body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+
+    <nav class="nav">
+      <a href="/" class="navLink active">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink">Vocales</a>
+    </nav>
+  </aside>
+
+  <main class="main">
   <h1>Analizador de PDFs</h1>
 
   <form id="form" class="card">
@@ -261,5 +271,6 @@
     if (lenChart) lenChart.update();
   });
 </script>
+  </main>
 </body>
 </html>

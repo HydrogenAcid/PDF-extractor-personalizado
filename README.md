@@ -130,6 +130,102 @@ pip install -r requirements.txt
 
 Abrir navegador http://127.0.0.1:5000
 
+## 6. Análisis de pares de vocales (Vowel n-grams)
+
+Se incorporó una nueva sección para analizar **pares y combinaciones de vocales dentro de palabras** con el objetivo de comparar patrones fonotácticos entre distintos idiomas.
+
+Esta funcionalidad permite estudiar la **estructura vocálica de textos** y comparar distribuciones entre lenguas.
+
+### Características
+
+El sistema analiza automáticamente:
+
+- Frecuencia de pares de vocales
+- Frecuencia de combinaciones vocálicas relevantes (diptongos y algunos triptongos)
+- Distribución de combinaciones vocálicas en textos largos
+
+El resultado se grafica como:
+
+- **Eje X:** índice del n-grama  
+- **Eje Y:** frecuencia del par (o n-grama) de vocales
+
+Cada libro cargado aparece como una nueva serie en la gráfica para facilitar comparaciones entre textos o idiomas.
+
+### Idiomas soportados
+
+El análisis incluye configuraciones específicas por idioma.
+
+#### Español
+
+Pares analizados:
+
+- ae, ai, ao, au  
+- ea, ei, eo, eu  
+- ia, ie, io, iu  
+- oa, oe, oi, ou  
+- ua, ue, ui, uo
+
+#### Inglés
+
+Incluye combinaciones donde **y puede funcionar como vocal**:
+
+- ae, ai, ao, au  
+- ea, ei, eo, eu  
+- ia, ie, io, iu  
+- oa, oe, oi, ou  
+- ua, ue, ui, uo  
+- ay, ey, iy, oy, uy  
+- ya, ye, yi, yo, yu
+
+#### Francés
+
+Similar al inglés, considerando **y como vocal** en ciertas posiciones.
+
+#### Alemán
+
+Se incluyen **umlauts** y diptongos característicos del idioma:
+
+- ie, ei, eu, äu, au, öu, üe, üa
+
+#### Mandarín (pinyin)
+
+Se analizan combinaciones propias del sistema fonológico del pinyin:
+
+- ai, ei, ao, ou  
+- ia, ie, iao, iu  
+- ua, uo, ui  
+- üe, üa
+
+### Conversión automática a pinyin
+
+Si el usuario selecciona **mandarín** y el texto contiene **caracteres chinos**, el sistema convierte automáticamente el texto a **pinyin** antes de realizar el análisis.
+
+Esto permite subir directamente:
+
+- Texto en chino (汉字): soportado (se convierte a pinyin)
+- Texto en pinyin: soportado
+- PDF escaneado: soportado (mediante OCR)
+
+La conversión se realiza utilizando la librería `pypinyin`.
+
+### Métricas adicionales
+
+El módulo calcula métricas adicionales sobre las vocales del corpus:
+
+- **vowel_chars:** número total de vocales individuales encontradas en el texto.
+- **ngrams_total:** número total de combinaciones de vocales detectadas.
+
+Estas métricas permiten comparar la **densidad de combinaciones vocálicas** entre idiomas o textos.
+
+### Interfaz
+
+Se agregó una nueva sección accesible desde el menú lateral de la aplicación:
+
+- Zipf + Shannon
+- Vocales
+
+Esto permite navegar entre los distintos tipos de análisis disponibles del corpus.
+
 Próximas mejoras
 
 -Exportación CSV

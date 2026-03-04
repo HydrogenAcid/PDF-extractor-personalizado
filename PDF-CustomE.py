@@ -6,9 +6,11 @@ from collections import Counter
 import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
+# PDF-CustomE.py (arriba, junto a imports)
+from vowels import register_vowels
 
 app = Flask(__name__)
-
+register_vowels(app)  # registra rutas de vowels.py en esta app
 WORD_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+")
 
 # -------------------- Extracción (texto -> OCR fallback) --------------------
