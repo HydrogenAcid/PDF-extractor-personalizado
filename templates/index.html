@@ -1,3 +1,4 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -23,7 +24,9 @@
   <section class="card">
     <div class="sectionHeader">
       <h2>Zipf: Rango vs Frecuencia (log-log)</h2>
-      <div class="small">Pendiente: ajuste lineal en log(rank) vs log(freq) con ranks [1..300]</div>
+      <div class="small">
+        Pendiente: intervalo óptimo por libro (se evita la cola freq=1). Hover: palabra, rank, freq.
+      </div>
     </div>
     <canvas id="zipfChart"></canvas>
 
@@ -36,6 +39,11 @@
             <th>Páginas</th>
             <th>Tokens</th>
             <th>Vocab</th>
+            <th>Plot max rank</th>
+            <th>Fit (rango)</th>
+            <th>Window</th>
+            <th>minFreq</th>
+            <th>R²</th>
             <th>Zipf slope</th>
           </tr>
         </thead>
@@ -47,7 +55,6 @@
   <section class="card">
     <div class="sectionHeader">
       <h2>Longitud de palabra vs Frecuencia</h2>
-      <div class="small">Distribución por longitudes agregando frecuencias por palabra</div>
     </div>
     <canvas id="lenChart"></canvas>
 
@@ -57,6 +64,7 @@
         <thead>
           <tr>
             <th>PDF</th>
+            <th>MaxLen</th>
             <th>Shannon H (nats)</th>
           </tr>
         </thead>
@@ -84,6 +92,17 @@
     return c;
   }
 
+  function fmt(x, k=6) {
+    if (x === null || x === undefined || Number.isNaN(x)) return "-";
+    return Number(x).toFixed(k);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+    }[m]));
+  }
+
   function ensureCharts() {
     if (!zipfChart) {
       zipfChart = new Chart(document.getElementById("zipfChart"), {
@@ -95,10 +114,22 @@
             x: { type: "logarithmic", title: { display: true, text: "Rango" } },
             y: { type: "logarithmic", title: { display: true, text: "Frecuencia" } }
           },
-          plugins: { legend: { position: "bottom" } }
+          plugins: {
+            legend: { position: "bottom" },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const p = ctx.raw; // {x,y,word}
+                  const w = p.word ? `"${p.word}"` : "";
+                  return `${w} — rank=${p.x}, freq=${p.y}`;
+                }
+              }
+            }
+          }
         }
       });
     }
+
     if (!lenChart) {
       lenChart = new Chart(document.getElementById("lenChart"), {
         type: "line",
@@ -106,16 +137,26 @@
         options: {
           responsive: true,
           scales: {
-            x: { 
+            x: {
               type: "linear",
-        min: 1,
-        max: 23,
-        ticks: { stepSize: 1 },
-        title: { display: true, text: "Longitud" }
+              min: 1,
+              max: 15,
+              ticks: { stepSize: 1 },
+              title: { display: true, text: "Longitud" }
             },
             y: { title: { display: true, text: "Frecuencia" } }
           },
-          plugins: { legend: { position: "bottom" } },
+          plugins: {
+            legend: { position: "bottom" },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const p = ctx.raw; // {x,y}
+                  return `len=${p.x}, freq=${p.y}`;
+                }
+              }
+            }
+          },
           elements: { point: { radius: 2 } }
         }
       });
@@ -125,12 +166,21 @@
   function addZipfRow(d) {
     const tb = document.querySelector("#zipfTable tbody");
     const tr = document.createElement("tr");
+
+    const fitA = d.zipf.fit_min_rank ?? "-";
+    const fitB = d.zipf.fit_max_rank ?? "-";
+
     tr.innerHTML = `
       <td>${escapeHtml(d.name)}</td>
       <td>${d.meta.pages}</td>
       <td>${d.meta.tokens}</td>
       <td>${d.meta.vocab}</td>
-      <td>${fmt(d.zipf.slope)}</td>
+      <td>${d.meta.max_rank_plot ?? "-"}</td>
+      <td>${fitA}..${fitB}</td>
+      <td>${d.zipf.fit_window ?? "-"}</td>
+      <td>${d.zipf.min_fit_freq ?? "-"}</td>
+      <td>${fmt(d.zipf.r2, 6)}</td>
+      <td>${fmt(d.zipf.slope, 6)}</td>
     `;
     tb.appendChild(tr);
   }
@@ -140,20 +190,10 @@
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(d.name)}</td>
-      <td>${fmt(d.lengths.shannon_entropy_nats)}</td>
+      <td>${d.lengths.max_len ?? "-"}</td>
+      <td>${fmt(d.lengths.shannon_entropy_nats, 6)}</td>
     `;
     tb.appendChild(tr);
-  }
-
-  function fmt(x) {
-    if (x === null || x === undefined || Number.isNaN(x)) return "-";
-    return Number(x).toFixed(6);
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, m => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
-    }[m]));
   }
 
   document.getElementById("form").addEventListener("submit", async (e) => {
@@ -167,18 +207,30 @@
 
     const color = nextColor();
 
-    // Zipf dataset (scatter con log scales)
-    const zipfPts = d.zipf.ranks.map((rk, i) => ({ x: rk, y: d.zipf.freqs[i] }));
+    const zipfPts = d.zipf.ranks.map((rk, i) => ({
+      x: rk,
+      y: d.zipf.freqs[i],
+      word: d.zipf.words[i]
+    }));
+
     zipfDatasets.push({
       label: d.name,
       data: zipfPts,
       showLine: false,
-      pointRadius: 2,
       borderColor: color,
-      backgroundColor: color
+      backgroundColor: color,
+      // resalta puntos dentro del intervalo de fit (por dataset)
+      fitMin: d.zipf.fit_min_rank,
+      fitMax: d.zipf.fit_max_rank,
+      pointRadius: (ctx) => {
+        const p = ctx.raw;
+        const ds = ctx.dataset;
+        const a = ds.fitMin, b = ds.fitMax;
+        if (a !== null && a !== undefined && b !== null && b !== undefined && p && p.x >= a && p.x <= b) return 4;
+        return 2;
+      }
     });
 
-    // Longitudes dataset (line)
     const lenPts = d.lengths.x.map((L, i) => ({ x: L, y: d.lengths.freqs[i] }));
     lenDatasets.push({
       label: d.name,
@@ -194,7 +246,6 @@
     addZipfRow(d);
     addLenRow(d);
 
-    // limpia el input para poder subir el mismo archivo si quieres
     e.target.reset();
   });
 
@@ -203,10 +254,8 @@
     lenDatasets.length = 0;
     colorIdx = 0;
 
-    const ztb = document.querySelector("#zipfTable tbody");
-    const ltb = document.querySelector("#lenTable tbody");
-    ztb.innerHTML = "";
-    ltb.innerHTML = "";
+    document.querySelector("#zipfTable tbody").innerHTML = "";
+    document.querySelector("#lenTable tbody").innerHTML = "";
 
     if (zipfChart) zipfChart.update();
     if (lenChart) lenChart.update();
