@@ -84,12 +84,14 @@ Al pasar el cursor sobre un punto de Zipf se muestra:
 
 ```
 PDF-CustomE.py
+vowels.py
 requirements.txt
 Procfile
 static/
     style.css
 templates/
     index.html
+    vocales.html
 README.md
 ```
 
