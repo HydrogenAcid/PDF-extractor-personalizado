@@ -6,3 +6,4 @@ pillow
 networkx
 matplotlib
 pypinyin
+networkx

@@ -12,16 +12,22 @@
 <body class="layout">
 
   <aside class="sidebar">
-    <div class="brand">Analizador</div>
-    <nav class="nav">
-      <a href="/" class="navLink">Zipf + Shannon</a>
-      <a href="/vocales" class="navLink active">Vocales</a>
-    </nav>
-  </aside>
+  <div class="brand">Analizador</div>
+  <nav class="nav">
+    <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+    <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+    <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+  </nav>
+</aside>
 
   <main class="main">
-    <h1>Vocales: frecuencia de n-gramas</h1>
+    <h1>Vocales: CDF de distancias entre pares</h1>
+    <div class="small">
+      Se calcula la distancia (en caracteres, cap = 40,000) entre ocurrencias de dos vocales (p.ej. a/e),
+      y se grafica la frecuencia relativa acumulada (CDF) que llega a 1.
+    </div>
 
+    <div id="chartsWrap"></div>
     <form id="formV" class="card">
       <div class="row">
         <input type="file" name="pdf" accept="application/pdf" required />
@@ -56,9 +62,8 @@
               <th>PDF</th>
               <th>Idioma</th>
               <th>Páginas</th>
-              <th>Words</th>
-              <th>Vowel chars</th>
-              <th>N-grams total</th>
+              <th>Max chars</th>
+              <th>Max dist</th> 
             </tr>
           </thead>
           <tbody></tbody>
@@ -73,8 +78,10 @@
     "#22c55e","#e11d48","#0ea5e9","#a3e635","#f97316","#14b8a6"
   ];
   let colorIdx = 0;
-  let vowelChart = null;
-  const vowelDatasets = [];
+
+  const charts = new Map();     // pair -> Chart
+  const chartMeta = new Map();  // pair -> {canvas, wrap}
+  const PHI = 2 / (1 + Math.sqrt(5));
 
   function nextColor() {
     const c = palette[colorIdx % palette.length];
@@ -88,36 +95,74 @@
     }[m]));
   }
 
-  function ensureChart() {
-    if (vowelChart) return;
+  function ensurePairChart(pair, maxDist) {
+    if (charts.has(pair)) return charts.get(pair);
 
-    vowelChart = new Chart(document.getElementById("vowelChart"), {
+    const wrap = document.createElement("div");
+    wrap.className = "card";
+    wrap.style.marginTop = "14px";
+
+    const h = document.createElement("div");
+    h.className = "sectionHeader";
+    h.innerHTML = `
+      <h2>CDF distancia: ${escapeHtml(pair)}</h2>
+      <div class="small">X: distancia (chars, cap=${maxDist}). Y: CDF.</div>
+    `;
+    wrap.appendChild(h);
+
+    const canvas = document.createElement("canvas");
+    wrap.appendChild(canvas);
+
+    document.getElementById("chartsWrap").appendChild(wrap);
+
+    // línea punteada y=PHI
+    const hline = {
+      label: `phi = ${PHI.toFixed(4)}`,
+      data: [{x: 0, y: PHI}, {x: maxDist, y: PHI}],
+      borderDash: [6, 6],
+      pointRadius: 0,
+    };
+
+    const chart = new Chart(canvas, {
       type: "line",
-      data: { datasets: vowelDatasets },
+      data: { datasets: [hline] },
       options: {
         responsive: true,
+        parsing: false,
         scales: {
-          x: {
-            type: "linear",
-            ticks: { stepSize: 1 },
-            title: { display: true, text: "n (índice del n-grama)" }
-          },
-          y: { title: { display: true, text: "Frecuencia" } }
+          x: { type: "linear", title: { display: true, text: "Distancia (chars)" } },
+          y: { title: { display: true, text: "CDF" } }
         },
         plugins: {
           legend: { position: "bottom" },
           tooltip: {
             callbacks: {
               label: (ctx) => {
-                const p = ctx.raw; // {x,y,gram}
-                return `${p.gram} — n=${p.x}, freq=${p.y}`;
+                const p = ctx.raw;
+                return `${ctx.dataset.label}: x=${p.x}, y=${p.y}`;
               }
             }
           }
         },
-        elements: { point: { radius: 2 } }
+        elements: { point: { radius: 0 } }
       }
     });
+
+    charts.set(pair, chart);
+    chartMeta.set(pair, { wrap, canvas });
+    return chart;
+  }
+
+  function resetAll() {
+    // elimina charts y contenedor
+    charts.forEach(ch => ch.destroy());
+    charts.clear();
+    chartMeta.clear();
+    document.getElementById("chartsWrap").innerHTML = "";
+
+    // limpia tabla
+    document.querySelector("#vowelTable tbody").innerHTML = "";
+    colorIdx = 0;
   }
 
   function addRow(d) {
@@ -127,16 +172,18 @@
       <td>${escapeHtml(d.name)}</td>
       <td>${escapeHtml(d.lang)}</td>
       <td>${d.pages}</td>
-      <td>${d.meta.words}</td>
-      <td>${d.meta.vowel_chars}</td>
-      <td>${d.meta.ngrams_total}</td>
+      <td>${d.max_chars}</td>
+      <td>${d.max_dist}</td>
     `;
     tb.appendChild(tr);
   }
 
+  // Ajusta tabla: cambia headers a lo nuevo
+  // (hazlo en HTML también: Max chars, Max dist)
+  // Aquí solo asumimos que ya cambiaste el thead.
+
   document.getElementById("formV").addEventListener("submit", async (e) => {
     e.preventDefault();
-    ensureChart();
 
     const fd = new FormData(e.target);
     const r = await fetch("/process_vowels", { method: "POST", body: fd });
@@ -144,27 +191,31 @@
     if (d.error) { alert(d.error); return; }
 
     const color = nextColor();
-    const pts = d.x.map((n, i) => ({ x: n, y: d.freqs[i], gram: d.grams[i] }));
 
-    vowelDatasets.push({
-      label: `${d.lang}: ${d.name}`,
-      data: pts,
-      borderColor: color,
-      backgroundColor: color,
-      tension: 0.1
-    });
+    // d.series = [{pair, x:[...], y:[...]}...]
+    for (const s of d.series) {
+      const pair = s.pair;
+      const chart = ensurePairChart(pair, d.max_dist);
 
-    vowelChart.update();
+      const pts = s.x.map((xv, i) => ({ x: xv, y: s.y[i] }));
+
+      chart.data.datasets.push({
+        label: `${d.lang}: ${d.name}`,
+        data: pts,
+        borderColor: color,
+        backgroundColor: color,
+        tension: 0.0,
+        pointRadius: 0
+      });
+
+      chart.update();
+    }
+
     addRow(d);
     e.target.reset();
   });
 
-  document.getElementById("resetBtnV").addEventListener("click", () => {
-    vowelDatasets.length = 0;
-    colorIdx = 0;
-    document.querySelector("#vowelTable tbody").innerHTML = "";
-    if (vowelChart) vowelChart.update();
-  });
+  document.getElementById("resetBtnV").addEventListener("click", resetAll);
 </script>
 </body>
 </html>

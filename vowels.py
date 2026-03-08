@@ -106,111 +106,117 @@ def words_from_text(text: str, lang: str) -> List[str]:
     # En pinyin, sigue siendo latin; para de/fr puede venir con diacríticos.
     return WORD_RE_LATIN.findall(text)
 
-# ---------- N-gramas de vocales ----------
+MAX_DIST_DEFAULT = 40_000
 
-def vowel_inventory(lang: str) -> str:
-    if lang == "de":
-        # consideramos umlauts explícitos
-        return "aeiouyäöü"
-    if lang == "fr":
-        # francés: considerar y como vocal
-        return "aeiouy"
-    if lang == "en":
-        return "aeiouy"  # puedes quitar y si no la quieres
+def pairs_for_lang(lang: str) -> List[Tuple[str, str]]:
+    # devuelve lista de pares (v1, v2)
     if lang == "es":
-        return "aeiou"
-    if lang == "zh_pinyin":
-        # pinyin: ü existe; y en pinyin no es vocal suelta típica
-        return "aeiouü"
-    return "aeiou"
-
-def ngrams_for_lang(lang: str) -> List[str]:
-    if lang == "zh_pinyin":
-        return ["ai","ei","ao","ou","ia","ie","iao","iu","ua","uo","ui","üe","üa"]
-
-
-    base = [
-        "ae","ai","ao","au",
-        "ea","ei","eo","eu",
-        "ia","ie","io","iu",
-        "oa","oe","oi","ou",
-        "ua","ue","ui","uo",
-    ]
-
-    if lang in ("fr","en"):
-        base += ["ay","ey","iy","oy","uy","ya","ye","yi","yo","yu"]
-
+        return [("a", "e"), ("a", "i"), ("a", "o"), ("a", "u")]
+    if lang == "en":
+        # mismos que español (según tu requerimiento)
+        return [("a", "e"), ("a", "i"), ("a", "o"), ("a", "u")]
     if lang == "de":
-        # diptongos alemanes con umlauts
-        base += ["äu","eu","ie","ei","au","öu","üa","üe"]
+        # umlauts (5 gráficas)
+        return [("a", "ä"), ("o", "ö"), ("u", "ü"), ("a", "ü"), ("o", "ü")]
+    if lang == "fr":
+        # y como vocal en pares con a,e,o,u
+        return [("y", "a"), ("y", "e"), ("y", "o"), ("y", "u")]
+    if lang == "zh_pinyin":
+        # 5 pares (de tu set previo, escogidos como pares de vocales)
+        return [("a", "i"), ("e", "i"), ("a", "o"), ("o", "u"), ("u", "ü")]
+    return [("a", "e")]
 
-    seen = set()
-    out = []
-    for g in base:
-        if g not in seen:
-            seen.add(g)
-            out.append(g)
-    return out
+def _positions_of_chars(text: str, targets: set[str], max_chars: int) -> Dict[str, List[int]]:
+    # guarda posiciones (índices) para cada target, limitado a max_chars
+    pos: Dict[str, List[int]] = {t: [] for t in targets}
+    upto = min(len(text), max_chars)
+    for i in range(upto):
+        ch = text[i]
+        if ch in pos:
+            pos[ch].append(i)
+    return pos
 
-def count_ngrams_in_word(word: str, grams: List[str]) -> Counter:
-    c = Counter()
-    if not word:
-        return c
-    for g in grams:
-        L = len(g)
-        if L == 0 or L > len(word):
-            continue
-        # conteo con traslape
-        start = 0
-        while True:
-            j = word.find(g, start)
-            if j < 0:
-                break
-            c[g] += 1
-            start = j + 1
-    return c
+def _nearest_distances(A: List[int], B: List[int], max_dist: int) -> List[int]:
+    # para cada posición en A, distancia al B más cercano (O(n))
+    if not A or not B:
+        return []
+    dists: List[int] = []
+    j = 0
+    m = len(B)
+    for a in A:
+        while j + 1 < m and abs(B[j + 1] - a) <= abs(B[j] - a):
+            j += 1
+        d = abs(B[j] - a)
+        if d > max_dist:
+            d = max_dist
+        dists.append(d)
+    return dists
 
-def analyze_vowels(text: str, lang: str) -> Dict:
+def _cdf_from_distances(dists: List[int], max_dist: int) -> Tuple[List[int], List[float]]:
+    # devuelve puntos (x,y) de CDF; y llega a 1 en max_dist (por capping)
+    if not dists:
+        return [0, max_dist], [0.0, 0.0]
+
+    dists.sort()
+    n = len(dists)
+
+    xs: List[int] = []
+    ys: List[float] = []
+
+    # puntos solo en cambios (compacto)
+    prev = None
+    for idx, d in enumerate(dists, start=1):
+        if prev is None or d != prev:
+            xs.append(d)
+            ys.append(idx / n)
+            prev = d
+        else:
+            ys[-1] = idx / n
+
+    # fuerza el último punto en max_dist con 1.0 (porque cap)
+    if xs[-1] != max_dist:
+        xs.append(max_dist)
+        ys.append(1.0)
+    else:
+        ys[-1] = 1.0
+
+    return xs, ys
+
+def analyze_vowel_pairs_cdf(text: str, lang: str, max_chars: int = MAX_DIST_DEFAULT, max_dist: int = MAX_DIST_DEFAULT) -> Dict:
     t = normalize_text_for_lang(text, lang)
-    words = words_from_text(t, lang)
+    pairs = pairs_for_lang(lang)
 
-    vowels = set(vowel_inventory(lang))
-    grams = ngrams_for_lang(lang)
+    # targets únicos
+    targets = set([v for p in pairs for v in p])
+    pos = _positions_of_chars(t, targets, max_chars=max_chars)
 
-    total_words = 0
-    total_vowel_chars = 0
-    total_ngrams = 0
-    agg = Counter()
+    series = []
+    for v1, v2 in pairs:
+        A = pos.get(v1, [])
+        B = pos.get(v2, [])
+        d1 = _nearest_distances(A, B, max_dist=max_dist)     # v1 -> nearest v2
+        d2 = _nearest_distances(B, A, max_dist=max_dist)     # v2 -> nearest v1
+        dists = d1 + d2                                      # simétrico
 
-    for w in words:
-        total_words += 1
-        # opcional: filtrar solo letras “relevantes” (vocales+consonantes)
-        # aquí solo contamos ngramas dentro de la palabra ya normalizada.
-        # pero calculamos total vocal chars para métricas.
-        total_vowel_chars += sum(1 for ch in w if ch in vowels)
+        xs, ys = _cdf_from_distances(dists, max_dist=max_dist)
 
-        # Para que no cuente cosas raras, si el gram contiene ü, el word debe tener ü literal (ya normalizado)
-        # Conteo directo de substrings
-        cw = count_ngrams_in_word(w, grams)
-        if cw:
-            agg.update(cw)
-            total_ngrams += sum(cw.values())
-
-    freqs = [int(agg.get(g, 0)) for g in grams]
-    xs = list(range(1, len(grams) + 1))
+        series.append({
+            "pair": f"{v1}/{v2}",
+            "x": xs,
+            "y": ys,
+            "counts": {
+                "n_v1": len(A),
+                "n_v2": len(B),
+                "n_dists": len(dists),
+            }
+        })
 
     return {
         "lang": lang,
-        "grams": grams,
-        "x": xs,
-        "freqs": freqs,
-        "meta": {
-            "words": total_words,
-            "vowel_chars": total_vowel_chars,
-            "ngrams_total": total_ngrams,
-        }
+        "max_chars": max_chars,
+        "max_dist": max_dist,
+        "series": series,
     }
-
 # ---------- Rutas Flask (se registran desde el main) ----------
 
 def register_vowels(app):
@@ -239,7 +245,9 @@ def register_vowels(app):
             # Si el usuario eligió zh_pinyin y el PDF trae 汉字, convierte antes del análisis
             if lang == "zh_pinyin" and contains_chinese(text):
                 text = chinese_to_pinyin(text)
-            out = analyze_vowels(text, lang)
+            MAX_CHARS = 40_000
+            MAX_DIST = 40_000
+            out = analyze_vowel_pairs_cdf(text, lang, max_chars=MAX_CHARS, max_dist=MAX_DIST)
             return jsonify({
                 "name": file.filename or "PDF",
                 "pages": len(pages),

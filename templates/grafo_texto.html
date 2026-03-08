@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Grafos de texto</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+
+  <body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+      <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+    </nav>
+  </aside>
+
+  <main class="main pageFade">
+  <h1>Grafo de texto con NetworkX</h1>
+
+
+  <form id="formGraph" class="card">
+    <div class="row">
+      <input type="file" name="pdf" accept="application/pdf" required />
+
+      <select name="lang">
+        <option value="es">Español</option>
+        <option value="en">Inglés</option>
+        <option value="fr">Francés</option>
+      </select>
+
+      <label>Span
+        <input type="number" name="span" min="1" max="5" value="1" style="width:80px;">
+      </label>
+
+      <label>minFreq
+        <input type="number" name="min_freq" min="1" max="20" value="2" style="width:80px;">
+      </label>
+
+      <label>maxVocab
+        <input type="number" name="max_vocab" min="50" max="1500" value="400" style="width:90px;">
+      </label>
+
+      <button type="submit">Subir y analizar</button>
+      <button type="button" id="resetBtn" class="secondary">Reset</button>
+    </div>
+
+    <div class="hint">
+      span=1 conecta cada palabra con la siguiente dentro de la misma página.
+      span=2 conecta con las siguientes dos. No se conectan palabras entre páginas.
+      minFreq filtra palabras que aparecen menos veces. maxVocab limita el número de palabras (las más frecuentes).
+  
+    </div>
+  </form>
+
+  <section class="card">
+    <div class="sectionHeader">
+      <h2>Distribución de grado</h2>
+      <div class="small">
+        Eje X = grado k, eje Y = número de nodos con ese grado.
+      </div>
+    </div>
+    <canvas id="degreeChart"></canvas>
+
+    <h3>Tabla de métricas</h3>
+    <div class="tableWrap">
+      <table id="metricsTable">
+        <thead>
+          <tr>
+            <th>PDF</th>
+            <th>Idioma</th>
+            <th>Páginas</th>
+            <th>Tokens raw</th>
+            <th>Tokens sin stopwords</th>
+            <th>Nodos</th>
+            <th>Aristas</th>
+            <th>Grado medio</th>
+            <th>Densidad</th>
+            <th>Componentes conexas</th>
+            <th>Tamaño comp. gigante</th>
+            <th>Assortativity</th>
+            <th>Clustering prom.</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="sectionHeader">
+      <h2>Subgrafo de visualización</h2>
+      <div class="small">
+        Se muestra solo una parte del grafo para no saturar el navegador.
+      </div>
+    </div>
+    <div id="graphView" style="height: 650px; border:1px solid #e5e7eb; border-radius:14px;"></div>
+  </section>
+
+<script>
+  const palette = [
+    "#4f46e5","#ef4444","#10b981","#f59e0b","#06b6d4","#8b5cf6",
+    "#22c55e","#e11d48","#0ea5e9","#a3e635","#f97316","#14b8a6"
+  ];
+
+  let colorIdx = 0;
+  let degreeChart = null;
+  const degreeDatasets = [];
+  let network = null;
+
+  function nextColor() {
+    const c = palette[colorIdx % palette.length];
+    colorIdx++;
+    return c;
+  }
+
+  function fmt(x, k = 6) {
+    if (x === null || x === undefined || Number.isNaN(x)) return "-";
+    return Number(x).toFixed(k);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      "\"":"&quot;",
+      "'":"&#039;"
+    }[m]));
+  }
+
+  function ensureChart() {
+    if (!degreeChart) {
+      degreeChart = new Chart(document.getElementById("degreeChart"), {
+        type: "line",
+        data: { datasets: degreeDatasets },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              type: "linear",
+              title: { display: true, text: "Grado k" }
+            },
+            y: {
+              title: { display: true, text: "Número de nodos" }
+            }
+          },
+          plugins: {
+            legend: { position: "bottom" }
+          },
+          elements: {
+            point: { radius: 2 }
+          }
+        }
+      });
+    }
+  }
+
+  function addMetricsRow(d) {
+    const tb = document.querySelector("#metricsTable tbody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(d.name)}</td>
+      <td>${escapeHtml(d.meta.lang)}</td>
+      <td>${d.meta.pages}</td>
+      <td>${d.meta.tokens_raw}</td>
+      <td>${d.meta.tokens_filtered}</td>
+      <td>${d.metrics.nodes}</td>
+      <td>${d.metrics.edges}</td>
+      <td>${fmt(d.metrics.avg_degree, 4)}</td>
+      <td>${fmt(d.metrics.density, 6)}</td>
+      <td>${d.metrics.connected_components}</td>
+      <td>${d.metrics.giant_component_size}</td>
+      <td>${fmt(d.metrics.assortativity, 6)}</td>
+      <td>${fmt(d.metrics.avg_clustering, 6)}</td>
+    `;
+    tb.appendChild(tr);
+  }
+
+  function drawNetwork(graphData) {
+    const container = document.getElementById("graphView");
+
+    const data = {
+      nodes: new vis.DataSet(graphData.nodes),
+      edges: new vis.DataSet(graphData.edges)
+    };
+
+    const options = {
+      physics: {
+        stabilization: true
+      },
+      interaction: {
+        hover: true
+      },
+      nodes: {
+        shape: "dot",
+        scaling: {
+          min: 8,
+          max: 35
+        },
+        font: {
+          size: 14
+        }
+      },
+      edges: {
+        scaling: {
+          min: 1,
+          max: 8
+        },
+        smooth: false
+      }
+    };
+
+    if (network) {
+      network.destroy();
+    }
+    network = new vis.Network(container, data, options);
+  }
+
+  document.getElementById("formGraph").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    ensureChart();
+
+    const fd = new FormData(e.target);
+    const r = await fetch("/process_graph_text", {
+      method: "POST",
+      body: fd
+    });
+
+    const d = await r.json();
+
+    if (d.error) {
+      alert(d.error);
+      return;
+    }
+
+    const color = nextColor();
+
+    const pts = d.degree_distribution.k.map((k, i) => ({
+      x: k,
+      y: d.degree_distribution.count[i]
+    }));
+
+    degreeDatasets.push({
+      label: d.name,
+      data: pts,
+      borderColor: color,
+      backgroundColor: color,
+      tension: 0.1
+    });
+
+    degreeChart.update();
+    addMetricsRow(d);
+    drawNetwork(d.display_graph);
+
+    e.target.reset();
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    degreeDatasets.length = 0;
+    colorIdx = 0;
+
+    document.querySelector("#metricsTable tbody").innerHTML = "";
+
+    if (degreeChart) {
+      degreeChart.update();
+    }
+
+    if (network) {
+      network.destroy();
+      network = null;
+    }
+
+    document.getElementById("graphView").innerHTML = "";
+  });
+</script>
+ </main>
+</body>
+</html>

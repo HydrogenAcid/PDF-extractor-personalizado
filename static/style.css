@@ -157,3 +157,19 @@ thead th{
 .main{
   min-width: 0;
 }
+
+select, input[type="number"]{
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+}
+
+.navBtn{
+  text-decoration: none;
+  background: var(--primary);
+  color: white;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+}

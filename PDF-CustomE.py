@@ -3,14 +3,15 @@ from flask import Flask, render_template, request, jsonify
 import os, re, math
 from collections import Counter
 
-import fitz  # PyMuPDF
+import fitz  
 import pytesseract
 from PIL import Image
-# PDF-CustomE.py (arriba, junto a imports)
 from vowels import register_vowels
+from graph_text import register_graph_text
 
 app = Flask(__name__)
 register_vowels(app)  # registra rutas de vowels.py en esta app
+register_graph_text(app)  # registra rutas de graph_text.py en esta app
 WORD_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+")
 
 # -------------------- Extracción (texto -> OCR fallback) --------------------
@@ -308,4 +309,4 @@ def process():
             os.remove(temp)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True,host="127.0.0.1", port=5000)
