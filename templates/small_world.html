@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Small-World | Watts-Strogatz</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+      <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+      <a href="/small_world" class="navLink {% if request.path == '/small_world' %}active{% endif %}">Small-World</a>
+    </nav>
+  </aside>
+
+  <main class="main pageFade">
+    <section class="card heroCard">
+      <span class="eyebrow">Watts-Strogatz 1998</span>
+      <h1>Average Shortest Path y Average Clustering Coefficient</h1>
+      <p class="lead">
+        Esta vista demuestra numéricamente las relaciones límite del paper para redes regulares
+        (<code>p = 0</code>) y redes aleatorias (<code>p = 1</code>), y además reproduce la figura 2 con
+        <code>L(p) / L(0)</code> y <code>C(p) / C(0)</code>.
+      </p>
+      <div class="formulaStrip">
+        <div class="formulaChip"><strong>Regular:</strong> <code>L(0) ~ n / (2k)</code></div>
+        <div class="formulaChip"><strong>Regular:</strong> <code>C(0) = 3(k-2) / 4(k-1) ~ 3/4</code></div>
+        <div class="formulaChip"><strong>Aleatoria:</strong> <code>L(1) ~ ln(n) / ln(k)</code></div>
+        <div class="formulaChip"><strong>Aleatoria:</strong> <code>C(1) ~ k / n</code></div>
+      </div>
+    </section>
+
+    <form id="smallWorldForm" class="card">
+      <div class="row denseRow">
+        <label class="field">
+          <span>n</span>
+          <input type="number" name="n" min="20" step="1" value="1000" required>
+        </label>
+        <label class="field">
+          <span>k</span>
+          <input type="number" name="k" min="2" step="2" value="10" required>
+        </label>
+        <label class="field">
+          <span>Realizaciones</span>
+          <input type="number" name="realizations" min="1" max="50" step="1" value="20" required>
+        </label>
+        <label class="field">
+          <span>Puntos figura</span>
+          <input type="number" name="log_points" min="5" max="25" step="1" value="13" required>
+        </label>
+        <button type="submit">Simular</button>
+        <button type="button" id="resetSmallWorld" class="secondary">Reset</button>
+      </div>
+      <div class="hint">
+        Parámetros del paper para la figura 2: <code>n = 1000</code>, <code>k = 10</code>, promedio sobre
+        <code>20</code> realizaciones. El eje horizontal usa escala logarítmica en <code>p</code> y
+        <code>L</code> se estima por muestreo BFS para mantener la simulación interactiva.
+      </div>
+    </form>
+
+    <section class="statsGrid" id="statsGrid">
+      <article class="card statCard">
+        <div class="small">Estado</div>
+        <div class="statValue" id="statusLabel">Listo para simular</div>
+        <div class="small">Se calcularán métricas y la figura 2 del paper.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">L(0)</div>
+        <div class="statValue" id="baselineL">-</div>
+        <div class="small">Characteristic path length de la red regular.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">C(0)</div>
+        <div class="statValue" id="baselineC">-</div>
+        <div class="small">Clustering medio de la red regular.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Zona small-world</div>
+        <div class="statValue" id="smallWorldBand">-</div>
+        <div class="small">Primer <code>p</code> donde baja fuerte <code>L</code> pero <code>C</code> sigue alto.</div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Figura 2 reproducida</h2>
+        <div class="small">
+          Curvas normalizadas respecto a la red regular: <code>L(p)/L(0)</code> y <code>C(p)/C(0)</code>.
+        </div>
+      </div>
+      <canvas id="figure2Chart"></canvas>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Demostración de relaciones límite</h2>
+        <div class="small">
+          Comparación entre simulación y las expresiones teóricas mencionadas en clase y en el paper.
+        </div>
+      </div>
+      <div class="tableWrap">
+        <table id="relationsTable">
+          <thead>
+            <tr>
+              <th>Caso</th>
+              <th>Fórmula L</th>
+              <th>L teórica</th>
+              <th>L empírica</th>
+              <th>Error relativo L</th>
+              <th>Fórmula C</th>
+              <th>C teórica</th>
+              <th>C empírica</th>
+              <th>Error relativo C</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Datos usados para la figura</h2>
+        <div class="small">Promedios por valor de <code>p</code> sobre las realizaciones seleccionadas.</div>
+      </div>
+      <div class="tableWrap">
+        <table id="figureTable">
+          <thead>
+            <tr>
+              <th>p</th>
+              <th>L(p)</th>
+              <th>C(p)</th>
+              <th>L(p) / L(0)</th>
+              <th>C(p) / C(0)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let figure2Chart = null;
+
+    function fmt(value, digits = 6) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return Number(value).toFixed(digits);
+    }
+
+    function fmtPct(value) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return `${(Number(value) * 100).toFixed(2)}%`;
+    }
+
+    function ensureChart() {
+      if (figure2Chart) return;
+
+      figure2Chart = new Chart(document.getElementById("figure2Chart"), {
+        type: "line",
+        data: {
+          datasets: [
+            {
+              label: "L(p) / L(0)",
+              data: [],
+              borderColor: "#e11d48",
+              backgroundColor: "#e11d48",
+              tension: 0.18,
+            },
+            {
+              label: "C(p) / C(0)",
+              data: [],
+              borderColor: "#0f766e",
+              backgroundColor: "#0f766e",
+              tension: 0.18,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: "nearest", intersect: false },
+          scales: {
+            x: {
+              type: "logarithmic",
+              title: { display: true, text: "p" }
+            },
+            y: {
+              min: 0,
+              max: 1.05,
+              title: { display: true, text: "Valor normalizado" }
+            }
+          },
+          plugins: {
+            legend: { position: "bottom" },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.raw.y, 6)}`
+              }
+            }
+          },
+          elements: {
+            point: { radius: 3, hoverRadius: 5 }
+          }
+        }
+      });
+    }
+
+    function firstSmallWorldPoint(pValues, lRatio, cRatio) {
+      for (let i = 0; i < pValues.length; i++) {
+        if (lRatio[i] <= 0.5 && cRatio[i] >= 0.85) {
+          return pValues[i];
+        }
+      }
+      return null;
+    }
+
+    function renderRelations(data) {
+      const tbody = document.querySelector("#relationsTable tbody");
+      tbody.innerHTML = "";
+
+      const cases = [
+        {
+          label: "Regular (p = 0)",
+          info: data.relations.regular_p0,
+          lTheory: data.relations.regular_p0.theoretical.avg_shortest_path_asymptotic,
+          cTheory: data.relations.regular_p0.theoretical.avg_clustering_exact,
+        },
+        {
+          label: "Aleatoria (p = 1)",
+          info: data.relations.random_p1,
+          lTheory: data.relations.random_p1.theoretical.avg_shortest_path_asymptotic,
+          cTheory: data.relations.random_p1.theoretical.avg_clustering_asymptotic,
+        }
+      ];
+
+      cases.forEach(({ label, info, lTheory, cTheory }) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${label}</td>
+          <td><code>${info.formula_path}</code></td>
+          <td>${fmt(lTheory, 6)}</td>
+          <td>${fmt(info.empirical.avg_shortest_path, 6)}</td>
+          <td>${fmtPct(info.comparison.path_relative_error)}</td>
+          <td><code>${info.formula_clustering}</code></td>
+          <td>${fmt(cTheory, 6)}</td>
+          <td>${fmt(info.empirical.avg_clustering, 6)}</td>
+          <td>${fmtPct(info.comparison.clustering_relative_error)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderFigureTable(data) {
+      const tbody = document.querySelector("#figureTable tbody");
+      tbody.innerHTML = "";
+
+      data.figure2.p_values.forEach((p, idx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${fmt(p, 6)}</td>
+          <td>${fmt(data.figure2.l_values[idx], 6)}</td>
+          <td>${fmt(data.figure2.c_values[idx], 6)}</td>
+          <td>${fmt(data.figure2.l_ratio[idx], 6)}</td>
+          <td>${fmt(data.figure2.c_ratio[idx], 6)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderSummary(data) {
+      document.getElementById("statusLabel").textContent = `${data.params.realizations} realizaciones`;
+      document.getElementById("baselineL").textContent = fmt(data.figure2.baseline_l0, 4);
+      document.getElementById("baselineC").textContent = fmt(data.figure2.baseline_c0, 4);
+
+      const pBand = firstSmallWorldPoint(
+        data.figure2.p_values,
+        data.figure2.l_ratio,
+        data.figure2.c_ratio
+      );
+      document.getElementById("smallWorldBand").textContent = pBand ? fmt(pBand, 6) : "No detectada";
+    }
+
+    function renderChart(data) {
+      ensureChart();
+
+      figure2Chart.data.datasets[0].data = data.figure2.p_values.map((p, idx) => ({
+        x: p,
+        y: data.figure2.l_ratio[idx]
+      }));
+
+      figure2Chart.data.datasets[1].data = data.figure2.p_values.map((p, idx) => ({
+        x: p,
+        y: data.figure2.c_ratio[idx]
+      }));
+
+      figure2Chart.update();
+    }
+
+    function resetView() {
+      document.querySelector("#relationsTable tbody").innerHTML = "";
+      document.querySelector("#figureTable tbody").innerHTML = "";
+      document.getElementById("statusLabel").textContent = "Listo para simular";
+      document.getElementById("baselineL").textContent = "-";
+      document.getElementById("baselineC").textContent = "-";
+      document.getElementById("smallWorldBand").textContent = "-";
+
+      if (figure2Chart) {
+        figure2Chart.data.datasets.forEach(ds => { ds.data = []; });
+        figure2Chart.update();
+      }
+    }
+
+    document.getElementById("smallWorldForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      document.getElementById("statusLabel").textContent = "Simulando...";
+
+      const fd = new FormData(e.target);
+      const response = await fetch("/process_small_world", {
+        method: "POST",
+        body: fd
+      });
+      const data = await response.json();
+
+      if (data.error) {
+        alert(data.error);
+        document.getElementById("statusLabel").textContent = "Error";
+        return;
+      }
+
+      renderSummary(data);
+      renderChart(data);
+      renderRelations(data);
+      renderFigureTable(data);
+    });
+
+    document.getElementById("resetSmallWorld").addEventListener("click", () => {
+      document.getElementById("smallWorldForm").reset();
+      document.querySelector("input[name='n']").value = 1000;
+      document.querySelector("input[name='k']").value = 10;
+      document.querySelector("input[name='realizations']").value = 20;
+      document.querySelector("input[name='log_points']").value = 13;
+      resetView();
+    });
+  </script>
+</body>
+</html>

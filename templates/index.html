@@ -17,6 +17,7 @@
   <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
   <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
   <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+  <a href="/small_world" class="navLink {% if request.path == '/small_world' %}active{% endif %}">Small-World</a>
     </nav>
   </aside>
 
@@ -31,6 +32,18 @@
     </div>
     <div class="hint">Sube PDFs uno por uno. Cada PDF se agrega a las gráficas con color distinto.</div>
   </form>
+
+  <section class="card featureCallout">
+    <div>
+      <div class="small">Nueva práctica</div>
+      <h2>Redes Small-World de Watts-Strogatz</h2>
+      <div class="hint calloutText">
+        Simula <code>Average Shortest Path</code> y <code>Average Clustering Coefficient</code> para
+        <code>p = 0</code> y <code>p = 1</code>, y reproduce la figura 2 del paper.
+      </div>
+    </div>
+    <a href="/small_world" class="navBtn">Abrir módulo</a>
+  </section>
 
   <section class="card">
     <div class="sectionHeader">

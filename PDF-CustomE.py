@@ -8,10 +8,12 @@ import pytesseract
 from PIL import Image
 from vowels import register_vowels
 from graph_text import register_graph_text
+from small_world import register_small_world
 
 app = Flask(__name__)
 register_vowels(app)  # registra rutas de vowels.py en esta app
 register_graph_text(app)  # registra rutas de graph_text.py en esta app
+register_small_world(app)  # registra rutas de small_world.py en esta app
 WORD_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+")
 
 # -------------------- Extracción (texto -> OCR fallback) --------------------
