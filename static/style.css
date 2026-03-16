@@ -173,3 +173,124 @@ select, input[type="number"]{
   border-radius: 10px;
   font-weight: 700;
 }
+
+.pageFade{
+  animation: pageFade 220ms ease-out;
+}
+
+.heroCard{
+  background:
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.10), transparent 30%),
+    linear-gradient(135deg, #ffffff, #f5f7ff);
+}
+
+.eyebrow{
+  display:inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.lead{
+  color: var(--muted);
+  max-width: 880px;
+  margin-top: 8px;
+}
+
+.formulaStrip{
+  display:flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.formulaChip{
+  border: 1px solid rgba(79, 70, 229, 0.15);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.featureCallout{
+  display:flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.calloutText{
+  max-width: 760px;
+}
+
+.denseRow{
+  align-items: end;
+}
+
+.field{
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.field span{
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.statsGrid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  max-width: 1100px;
+  margin-bottom: 16px;
+}
+
+.statCard{
+  margin-bottom: 0;
+}
+
+.statValue{
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--text);
+  margin: 6px 0 10px;
+}
+
+code{
+  background: #eef2ff;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+@keyframes pageFade{
+  from{
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 920px){
+  .layout{
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar{
+    position: static;
+    height: auto;
+  }
+
+  .featureCallout{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

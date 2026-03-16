@@ -1,240 +1,393 @@
-# Extractor de PDFs versión 2.0 - Análisis estadístico de texto: Ley de Zipf y Entropía de Shannon
+# PDF Extractor Personalizado
 
-## Descripción
+Aplicacion web en Flask para analizar PDFs desde varias perspectivas:
 
-Extractor de PDFs enfocado en análisis cuantitativo de texto. Permite subir múltiples libros en formato PDF y obtener, para cada uno:
+- ley de Zipf y entropia de Shannon
+- distribucion de pares de vocales
+- grafos de coocurrencia de texto
+- redes small-world de Watts-Strogatz
 
--Distribución Rango vs Frecuencia (Ley de Zipf)
--Pendiente en plano log-log
--Distribución Longitud de palabra vs Frecuencia
--Entropía de Shannon sobre la distribución de longitudes
--Métricas básicas del corpus
+La interfaz usa un menu lateral para cambiar entre ventanas, pero todo corre dentro del mismo servidor Flask.
 
-Cada PDF se agrega dinámicamente a las gráficas con un color distinto y se muestran tablas comparativas.
+## Cambios de hoy
 
-## Funcionalidades
+Hoy se agrego un nuevo modulo de redes small-world basado en el paper de Watts y Strogatz (1998).
 
-### 1. Extracción automática de texto
+Se incorporaron estos cambios:
 
--Intenta primero extraer texto nativo usando PyMuPDF (ordenando bloques para mejorar lectura en columnas).
--Si el texto es insuficiente, realiza OCR automático con Tesseract.
--No requiere selección manual de columnas ni activación de OCR.
+- nuevo archivo `small_world.py`
+- nueva vista `templates/small_world.html`
+- integracion de la ruta `/small_world` en `PDF-CustomE.py`
+- enlace nuevo en el menu lateral de todas las ventanas
+- estilos adicionales en `static/style.css`
+- tarjeta informativa en la ventana principal para entrar al modulo small-world
 
-### 2. Ley de Zipf
+El nuevo modulo permite:
 
-Para cada libro:
-1.Se tokeniza el texto.
-2.Se cuentan frecuencias.
-3.Se ordenan por frecuencia descendente.
-4.Se asigna rango.
-5.Se grafica en plano log-log.
-6.Se calcula la pendiente mediante regresión lineal en log(rank) vs log(freq).
+- demostrar las relaciones teoricas de `Average Shortest Path` y `Average Clustering Coefficient`
+- comparar red regular `p = 0` contra red aleatoria `p = 1`
+- reproducir la figura 2 del paper con parametros por defecto `n = 1000`, `k = 10`, `20` realizaciones
+- mostrar tablas con teoria, simulacion y error relativo
 
-**Ajuste por intervalo óptimo:**
--La pendiente se calcula en el intervalo con mejor ajuste (máximo $$R^2$$)
--Se evita la cola de frecuencia 1.
--Se ignoran los primeros ranks dominados por stopwords.
--Se descartan ventanas con baja variación.
+## Resumen de la aplicacion
 
-### 3. Distribución de longitudes
+La app recibe un PDF, intenta extraer texto con PyMuPDF y, si el texto es insuficiente, usa OCR con Tesseract.
 
-Para cada libro:
--Se agrupan palabras por longitud (1–23 caracteres).
--Se suma la frecuencia total por longitud.
--Se grafica longitud vs frecuencia.
--Se calcula la entropía de Shannon.
+Con ese texto base, cada modulo aplica un analisis distinto:
 
-$$H = -\sum P(x_i) \log(P(x_i))$$
-
-$$P(x_i) = \frac{f(x_i)}{\sum f(x_i)}$$
-
-La entropía se reporta en nats.
-
-### 4. Comparación múltiple
-
--Se pueden subir múltiples PDFs consecutivamente.
--Cada uno aparece como un nuevo dataset en ambas gráficas.
--Se puede resetear el análisis sin reiniciar el servidor.
-
-### 5. Tooltips enriquecidos
-
-Al pasar el cursor sobre un punto de Zipf se muestra:
--palabra
--rank
--frecuencia
-
-## Métricas calculadas
-
--Tokens: total de palabras (con repetición)
--Vocab: número de palabras únicas
--Plot max rank
--Zipf slope
--Zipf R²
--Entropía de Shannon
-
-## Limitaciones actuales
-
-1.OCR en despliegue Render no incluye Tesseract por defecto.
-2.Tokenización simple: usa regex básica.
-3.Zipf heurístico: el intervalo se selecciona con heurísticas.
-4.Rendimiento: no se grafica todo el vocabulario si es muy grande.
-5.Memoria: el texto completo se procesa en memoria.
+- `Zipf + Shannon`: frecuencia de palabras y distribucion de longitudes
+- `Vocales`: distancias entre pares de vocales y su CDF
+- `Grafos`: red de coocurrencia por pagina con metricas estructurales
+- `Small-World`: simulacion de redes Watts-Strogatz
 
 ## Estructura del proyecto
 
-```
+```text
 PDF-CustomE.py
+graph_text.py
+small_world.py
 vowels.py
 requirements.txt
-Procfile
+.gitignore
 static/
     style.css
 templates/
     index.html
     vocales.html
-README.md
+    grafo_texto.html
+    small_world.html
 ```
 
-## Instalación
+## Script principal
 
-1.Clonar repositorio
+### `PDF-CustomE.py`
+
+Es el punto de entrada de la aplicacion.
+
+Responsabilidades:
+
+- crea la app Flask
+- registra las rutas de `vowels.py`
+- registra las rutas de `graph_text.py`
+- registra las rutas de `small_world.py`
+- implementa la ventana principal `Zipf + Shannon`
+- hace la extraccion automatica de texto para ese modulo
+- calcula metricas basicas del corpus
+
+Flujo del modulo principal:
+
+1. Se recibe un PDF en `/process`.
+2. Se intenta extraer texto nativo con PyMuPDF.
+3. Si el texto es insuficiente, se usa OCR con Tesseract.
+4. Se tokeniza el texto.
+5. Se construye la distribucion rango-frecuencia.
+6. Se estima el mejor intervalo para el ajuste de Zipf.
+7. Se calcula la distribucion de longitudes y la entropia de Shannon.
+8. Se devuelve JSON a la interfaz para dibujar graficas y tablas.
+
+## Modulos auxiliares
+
+### `vowels.py`
+
+Implementa el analisis de pares de vocales.
+
+Responsabilidades:
+
+- extraer texto con PyMuPDF u OCR
+- normalizar texto segun idioma
+- convertir chino a pinyin cuando aplica
+- localizar posiciones de vocales
+- calcular distancias entre pares de vocales
+- construir una CDF por cada par
+- exponer las rutas `/vocales` y `/process_vowels`
+
+Idiomas contemplados:
+
+- espanol
+- ingles
+- frances
+- aleman
+- mandarin en pinyin
+
+Salida principal:
+
+- una serie CDF por cada par de vocales configurado
+- metadatos del archivo y de la configuracion elegida
+
+### `graph_text.py`
+
+Implementa el analisis de grafos de coocurrencia de palabras.
+
+Responsabilidades:
+
+- extraer texto con PyMuPDF u OCR
+- tokenizar por idioma
+- eliminar stopwords
+- construir un grafo no dirigido por pagina
+- calcular metricas de red
+- generar una distribucion de grados
+- devolver un subgrafo compacto para visualizacion
+- exponer las rutas `/grafo_texto` y `/process_graph_text`
+
+Metricas calculadas:
+
+- numero de nodos
+- numero de aristas
+- grado medio
+- densidad
+- numero de componentes conexas
+- tamano de la componente gigante
+- assortativity
+- clustering promedio
+
+### `small_world.py`
+
+Implementa el modulo de redes small-world.
+
+Responsabilidades:
+
+- validar los parametros `n`, `k`, `realizations` y `log_points`
+- generar grafos Watts-Strogatz conectados
+- calcular `Average Shortest Path`
+- calcular `Average Clustering Coefficient`
+- comparar teoria contra simulacion
+- construir los datos necesarios para la figura 2
+- exponer las rutas `/small_world` y `/process_small_world`
+
+Conceptos clave:
+
+- `n`: numero de nodos de la red
+- `k`: numero de vecinos iniciales por nodo en la red regular
+- `p`: probabilidad de reconexion de una arista
+
+Relaciones teoricas implementadas:
+
+- red regular `p = 0`
+  - `L(0) ~ n / (2k)`
+  - `C(0) = 3(k-2) / (4(k-1)) ~ 3/4`
+- red aleatoria `p = 1`
+  - `L(1) ~ ln(n) / ln(k)`
+  - `C(1) ~ k / n`
+
+Nota de implementacion:
+
+Para mantener la simulacion interactiva, el `Average Shortest Path` se estima por muestreo BFS cuando la red es grande. Esto reduce el tiempo de espera sin perder la forma general de la figura 2.
+
+## Ventanas de la aplicacion
+
+### 1. Ventana `Zipf + Shannon`
+
+Archivo asociado:
+
+- `templates/index.html`
+
+Que muestra:
+
+- formulario para subir un PDF
+- grafica log-log de rango vs frecuencia
+- tabla con paginas, tokens, vocabulario, `R^2` y pendiente Zipf
+- grafica de longitud de palabra vs frecuencia
+- tabla con entropia de Shannon
+- acceso rapido al modulo small-world
+
+Uso esperado:
+
+- subir varios PDFs uno por uno
+- comparar sus curvas y tablas en la misma interfaz
+
+### 2. Ventana `Vocales`
+
+Archivo asociado:
+
+- `templates/vocales.html`
+
+Que muestra:
+
+- selector de idioma
+- carga de PDF
+- una o varias graficas CDF de distancias entre pares de vocales
+- una tabla con idioma, paginas, `max_chars` y `max_dist`
+
+Uso esperado:
+
+- comparar estructura vocalica entre idiomas o entre distintos textos
+
+### 3. Ventana `Grafos`
+
+Archivo asociado:
+
+- `templates/grafo_texto.html`
+
+Que muestra:
+
+- carga de PDF
+- parametros `span`, `minFreq` y `maxVocab`
+- grafica de distribucion de grado
+- tabla con metricas del grafo
+- visualizacion interactiva del subgrafo con vis-network
+
+Uso esperado:
+
+- estudiar relaciones locales entre palabras frecuentes
+- observar densidad, clustering y estructura de conexiones
+
+### 4. Ventana `Small-World`
+
+Archivo asociado:
+
+- `templates/small_world.html`
+
+Que muestra:
+
+- parametros `n`, `k`, numero de realizaciones y numero de puntos de la figura
+- formulas teoricas visibles en la cabecera
+- tarjetas resumen con `L(0)`, `C(0)` y zona small-world
+- grafica de la figura 2 con `L(p)/L(0)` y `C(p)/C(0)`
+- tabla comparativa entre teoria y simulacion
+- tabla con datos numericos para cada valor de `p`
+
+Uso esperado:
+
+- exponer el modelo de Watts-Strogatz
+- demostrar el efecto small-world
+- justificar matematicamente los extremos `p = 0` y `p = 1`
+
+## Plantillas y frontend
+
+### `templates/index.html`
+
+Vista principal del modulo Zipf + Shannon. Usa Chart.js para mostrar:
+
+- grafica de Zipf
+- grafica de longitudes
+- tablas comparativas
+
+### `templates/vocales.html`
+
+Renderiza varias graficas CDF, una por cada par de vocales. Crea dinamicamente los charts necesarios.
+
+### `templates/grafo_texto.html`
+
+Combina Chart.js para la distribucion de grado y vis-network para el subgrafo interactivo.
+
+### `templates/small_world.html`
+
+Renderiza la simulacion de Watts-Strogatz con:
+
+- formulario de parametros
+- grafica principal de la figura 2
+- tabla de relaciones teoricas
+- tabla de valores simulados
+
+### `static/style.css`
+
+Hoja de estilos compartida por todas las ventanas.
+
+Incluye:
+
+- layout general con sidebar
+- tarjetas y tablas reutilizables
+- estilos de formularios
+- estilos nuevos para la vista small-world, como `heroCard`, `statsGrid` y `featureCallout`
+
+## Dependencias
+
+El archivo `requirements.txt` declara:
+
+- `flask`
+- `pdfplumber`
+- `pymupdf`
+- `pytesseract`
+- `pillow`
+- `networkx`
+- `matplotlib`
+- `pypinyin`
+
+Observacion:
+
+- `pdfplumber` y `matplotlib` no son el centro del flujo actual, pero siguen en el entorno declarado
+- `networkx` aparece repetido en `requirements.txt`; no rompe la instalacion, pero puede limpiarse despues
+
+## Flujo general de uso
+
+1. Levantar el servidor Flask.
+2. Abrir `http://127.0.0.1:5000/`.
+3. Elegir la ventana desde el menu lateral.
+4. Cargar un PDF o ejecutar una simulacion.
+5. Revisar graficas, tablas y metricas.
+6. Resetear si se desea iniciar una comparacion limpia.
+
+## Instalacion
+
+### 1. Clonar el repositorio
 
 ```bash
-git clone <repositorio>
-cd <directorio>
+git clone https://github.com/HydrogenAcid/PDF-extractor-personalizado.git
+cd PDF-extractor-personalizado
 ```
 
-2.Crear entorno virtual
+### 2. Crear un entorno virtual
 
 ```bash
 python -m venv .venv
 ```
 
-3.Activar entorno
+### 3. Activar el entorno virtual
 
-**Git Bash:**
+PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Git Bash:
+
 ```bash
 source .venv/Scripts/activate
 ```
 
-**PowerShell:**
-```powershell
-..venv\Scripts\Activate.ps1
-```
-
-4.Instalar dependencias
+### 4. Instalar dependencias
 
 ```bash
 pip install -r requirements.txt
 ```
 
-5.Ejecutar servidor python PDF-CustomE.py
+### 5. Ejecutar el servidor
 
-Abrir navegador http://127.0.0.1:5000
+```bash
+python PDF-CustomE.py
+```
 
-## 6. Análisis de pares de vocales (Vowel n-grams)
+### 6. Abrir en el navegador
 
-Se incorporó una nueva sección para analizar **pares y combinaciones de vocales dentro de palabras** con el objetivo de comparar patrones fonotácticos entre distintos idiomas.
+```text
+http://127.0.0.1:5000/
+```
 
-Esta funcionalidad permite estudiar la **estructura vocálica de textos** y comparar distribuciones entre lenguas.
+## Archivos ignorados por git
 
-### Características
+`.gitignore` excluye:
 
-El sistema analiza automáticamente:
+- entorno virtual `.venv/`
+- caches de Python
+- archivos temporales `.pyc`
+- logs
+- archivos PDF
 
-- Frecuencia de pares de vocales
-- Frecuencia de combinaciones vocálicas relevantes (diptongos y algunos triptongos)
-- Distribución de combinaciones vocálicas en textos largos
+Esto evita subir archivos grandes, resultados temporales y dependencias locales.
 
-El resultado se grafica como:
+## Estado actual
 
-- **Eje X:** índice del n-grama  
-- **Eje Y:** frecuencia del par (o n-grama) de vocales
+La aplicacion ya integra cuatro modulos en una sola interfaz:
 
-Cada libro cargado aparece como una nueva serie en la gráfica para facilitar comparaciones entre textos o idiomas.
+- analisis estadistico de texto
+- analisis vocalico
+- analisis de grafos de texto
+- simulacion small-world
 
-### Idiomas soportados
+Es un entorno de trabajo util para cursos de:
 
-El análisis incluye configuraciones específicas por idioma.
-
-#### Español
-
-Pares analizados:
-
-- ae, ai, ao, au  
-- ea, ei, eo, eu  
-- ia, ie, io, iu  
-- oa, oe, oi, ou  
-- ua, ue, ui, uo
-
-#### Inglés
-
-Incluye combinaciones donde **y puede funcionar como vocal**:
-
-- ae, ai, ao, au  
-- ea, ei, eo, eu  
-- ia, ie, io, iu  
-- oa, oe, oi, ou  
-- ua, ue, ui, uo  
-- ay, ey, iy, oy, uy  
-- ya, ye, yi, yo, yu
-
-#### Francés
-
-Similar al inglés, considerando **y como vocal** en ciertas posiciones.
-
-#### Alemán
-
-Se incluyen **umlauts** y diptongos característicos del idioma:
-
-- ie, ei, eu, äu, au, öu, üe, üa
-
-#### Mandarín (pinyin)
-
-Se analizan combinaciones propias del sistema fonológico del pinyin:
-
-- ai, ei, ao, ou  
-- ia, ie, iao, iu  
-- ua, uo, ui  
-- üe, üa
-
-### Conversión automática a pinyin
-
-Si el usuario selecciona **mandarín** y el texto contiene **caracteres chinos**, el sistema convierte automáticamente el texto a **pinyin** antes de realizar el análisis.
-
-Esto permite subir directamente:
-
-- Texto en chino (汉字): soportado (se convierte a pinyin)
-- Texto en pinyin: soportado
-- PDF escaneado: soportado (mediante OCR)
-
-La conversión se realiza utilizando la librería `pypinyin`.
-
-### Métricas adicionales
-
-El módulo calcula métricas adicionales sobre las vocales del corpus:
-
-- **vowel_chars:** número total de vocales individuales encontradas en el texto.
-- **ngrams_total:** número total de combinaciones de vocales detectadas.
-
-Estas métricas permiten comparar la **densidad de combinaciones vocálicas** entre idiomas o textos.
-
-### Interfaz
-
-Se agregó una nueva sección accesible desde el menú lateral de la aplicación:
-
-- Zipf + Shannon
-- Vocales
-
-Esto permite navegar entre los distintos tipos de análisis disponibles del corpus.
-
-Próximas mejoras
-
--Exportación CSV
--Eliminación de stopwords
--Lematización
--Selección dinámica del intervalo Zipf
--Entropía en bits
--Docker para OCR
-
-Versión Extractor de PDFs 2.1
+- teoria de redes
+- analisis de lenguaje
+- estadistica de texto
+- complejidad y sistemas dinamicos
