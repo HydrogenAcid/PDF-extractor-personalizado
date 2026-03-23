@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Erdos Renyi</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+      <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+      <a href="/small_world" class="navLink {% if request.path == '/small_world' %}active{% endif %}">Small-World</a>
+      <a href="/erdos_renyi" class="navLink {% if request.path == '/erdos_renyi' %}active{% endif %}">Erdos Renyi</a>
+    </nav>
+  </aside>
+
+  <main class="main pageFade">
+    <section class="card heroCard">
+      <span class="eyebrow">Modelos probabilisticos</span>
+      <h1>Erdos Renyi</h1>
+      <p class="lead">
+        Esta pagina mantiene fijos el numero de nodos y aristas para comparar como cambia la red
+        cuando las conexiones se ordenan por una distribucion de probabilidad distinta:
+        Monte Carlo, Poisson, Gauss, SBM y Power Law truncada.
+      </p>
+    </section>
+
+    <form id="erdosForm" class="card">
+      <div class="row denseRow">
+        <label class="field">
+          <span>Distribucion</span>
+          <select name="distribution">
+            <option value="montecarlo" {% if default_distribution=='montecarlo' %}selected{% endif %}>Monte Carlo
+            </option>
+            <option value="poisson" {% if default_distribution=='poisson' %}selected{% endif %}>Poisson</option>
+            <option value="gauss" {% if default_distribution=='gauss' %}selected{% endif %}>Gauss</option>
+            <option value="sbm" {% if default_distribution=='sbm' %}selected{% endif %}>SBM</option>
+            <option value="power_law_truncated" {% if default_distribution=='power_law_truncated' %}selected{% endif %}>
+              Power Law truncada</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Nodos</span>
+          <input type="number" name="nodes" min="20" max="250" step="1"
+            value="{{ distribution_defaults[default_distribution]['nodes'] }}" required>
+        </label>
+        <label class="field">
+          <span>Aristas</span>
+          <input type="number" name="edges" min="10" max="350" step="1"
+            value="{{ distribution_defaults[default_distribution]['edges'] }}" required>
+        </label>
+        <button type="submit">Simular</button>
+        <button type="button" id="resetErdos" class="secondary">Reset</button>
+      </div>
+      <div class="hint">
+        Limites: maximo <code>250</code> nodos y <code>350</code> aristas. El panel izquierdo muestra la
+        distribucion seleccionada y el derecho la figura de la red generada con NetworkX.
+        Al cambiar la distribucion, la pagina carga automaticamente un par de valores sugeridos de nodos y aristas.
+      </div>
+    </form>
+
+    <section class="statsGrid">
+      <article class="card statCard">
+        <div class="small">Distribucion activa</div>
+        <div class="statValue" id="activeDist">-</div>
+        <div class="small" id="distDescription">Selecciona una distribucion y ejecuta la simulacion.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Layout usado</div>
+        <div class="statValue" id="layoutLabel">-</div>
+        <div class="small">Cada distribucion usa un layout distinto para leerse mejor.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">p equivalente</div>
+        <div class="statValue" id="equivalentP">-</div>
+        <div class="small">Valor de densidad equivalente si se interpretara como G(n, p).</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Grado medio</div>
+        <div class="statValue" id="avgDegree">-</div>
+        <div class="small">Promedio de conexiones por nodo.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Componentes</div>
+        <div class="statValue" id="components">-</div>
+        <div class="small">Numero de componentes conexas en la red simulada.</div>
+      </article>
+    </section>
+
+    <section class="erGrid">
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Distribucion</h2>
+          <div class="small" id="distChartTitle">Histograma o conteo del modelo seleccionado.</div>
+        </div>
+        <canvas id="erdosDistChart"></canvas>
+      </article>
+
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Figura de la red</h2>
+          <div class="networkFigureFrame">
+            <img id="networkImage" class="networkFigureImage" alt="Figura de red Erdos Renyi">
+            <div id="networkPlaceholder" class="networkPlaceholder">Ejecuta una simulacion para ver la red.</div>
+          </div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Tabla de simulaciones</h2>
+        <div class="small">La tabla se actualiza con cada corrida manteniendo el historial hasta pulsar reset.</div>
+      </div>
+      <div class="tableWrap">
+        <table id="erdosTable">
+          <thead>
+            <tr>
+              <th>Distribucion</th>
+              <th>Nodos</th>
+              <th>Aristas</th>
+              <th>p equivalente</th>
+              <th>Grado medio</th>
+              <th>Grado max</th>
+              <th>Densidad</th>
+              <th>Componentes</th>
+              <th>Comp. gigante</th>
+              <th>Clustering</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const distributionDefaults = {{ distribution_defaults | tojson }};
+    const defaultDistribution = "{{ default_distribution }}";
+    let distChart = null;
+
+    function fmt(value, digits = 4) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return Number(value).toFixed(digits);
+    }
+
+    function ensureChart() {
+      if (distChart) return;
+      distChart = new Chart(document.getElementById("erdosDistChart"), {
+        type: "bar",
+        data: {
+          labels: [],
+          datasets: [{
+            label: "Frecuencia",
+            data: [],
+            backgroundColor: "#2563eb",
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              ticks: {
+                maxRotation: 0,
+                autoSkip: true
+              },
+              title: { display: true, text: "Rango" }
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: "Frecuencia" }
+            }
+          }
+        }
+      });
+    }
+
+    function addRow(data) {
+      const tbody = document.querySelector("#erdosTable tbody");
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${data.distribution_label}</td>
+        <td>${data.metrics.nodes}</td>
+        <td>${data.metrics.edges}</td>
+        <td>${fmt(data.metrics.equivalent_p, 5)}</td>
+        <td>${fmt(data.metrics.avg_degree, 4)}</td>
+        <td>${data.metrics.max_degree}</td>
+        <td>${fmt(data.metrics.density, 5)}</td>
+        <td>${data.metrics.connected_components}</td>
+        <td>${data.metrics.giant_component_size}</td>
+        <td>${fmt(data.metrics.avg_clustering, 5)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    function renderSummary(data) {
+      document.getElementById("activeDist").textContent = data.distribution_label;
+      document.getElementById("distDescription").textContent = data.description;
+      document.getElementById("layoutLabel").textContent = data.layout_label;
+      document.getElementById("equivalentP").textContent = fmt(data.metrics.equivalent_p, 5);
+      document.getElementById("avgDegree").textContent = fmt(data.metrics.avg_degree, 3);
+      document.getElementById("components").textContent = data.metrics.connected_components;
+    }
+
+    function renderChart(data) {
+      ensureChart();
+      document.getElementById("distChartTitle").textContent = data.distribution_plot.title;
+      distChart.data.labels = data.distribution_plot.labels;
+      distChart.data.datasets[0].data = data.distribution_plot.values;
+      distChart.data.datasets[0].label = data.distribution_plot.y_label;
+      distChart.options.scales.x.title.text = data.distribution_plot.x_label;
+      distChart.options.scales.y.title.text = data.distribution_plot.y_label;
+      distChart.update();
+    }
+
+    function renderNetwork(data) {
+      const img = document.getElementById("networkImage");
+      const placeholder = document.getElementById("networkPlaceholder");
+      img.src = `data:image/png;base64,${data.network_image_b64}`;
+      img.style.display = "block";
+      placeholder.style.display = "none";
+    }
+
+    function resetView() {
+      document.querySelector("#erdosTable tbody").innerHTML = "";
+      document.getElementById("activeDist").textContent = "-";
+      document.getElementById("distDescription").textContent = "Selecciona una distribucion y ejecuta la simulacion.";
+      document.getElementById("layoutLabel").textContent = "-";
+      document.getElementById("equivalentP").textContent = "-";
+      document.getElementById("avgDegree").textContent = "-";
+      document.getElementById("components").textContent = "-";
+      document.getElementById("distChartTitle").textContent = "Histograma o conteo del modelo seleccionado.";
+
+      const img = document.getElementById("networkImage");
+      img.removeAttribute("src");
+      img.style.display = "none";
+      document.getElementById("networkPlaceholder").style.display = "flex";
+
+      if (distChart) {
+        distChart.data.labels = [];
+        distChart.data.datasets[0].data = [];
+        distChart.update();
+      }
+    }
+
+    function applyDefaultsForDistribution(distribution) {
+      const defaults = distributionDefaults[distribution];
+      if (!defaults) return;
+      document.querySelector("input[name='nodes']").value = defaults.nodes;
+      document.querySelector("input[name='edges']").value = defaults.edges;
+    }
+
+    document.getElementById("erdosForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const fd = new FormData(event.target);
+      const response = await fetch("/process_erdos_renyi", {
+        method: "POST",
+        body: fd
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      renderSummary(data);
+      renderChart(data);
+      renderNetwork(data);
+      addRow(data);
+    });
+
+    document.querySelector("select[name='distribution']").addEventListener("change", (event) => {
+      applyDefaultsForDistribution(event.target.value);
+    });
+
+    document.getElementById("resetErdos").addEventListener("click", () => {
+      document.getElementById("erdosForm").reset();
+      document.querySelector("select[name='distribution']").value = defaultDistribution;
+      applyDefaultsForDistribution(defaultDistribution);
+      resetView();
+    });
+  </script>
+</body>
+
+</html>
