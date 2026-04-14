@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fractals</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+      <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+      <a href="/small_world" class="navLink {% if request.path == '/small_world' %}active{% endif %}">Small-World</a>
+      <a href="/erdos_renyi" class="navLink {% if request.path == '/erdos_renyi' %}active{% endif %}">Erdos Renyi</a>
+      <a href="/fractals" class="navLink {% if request.path == '/fractals' %}active{% endif %}">Fractals</a>
+      <a href="/hurst" class="navLink {% if request.path == '/hurst' %}active{% endif %}">Hurst</a>
+    </nav>
+  </aside>
+
+  <main class="main pageFade">
+    <section class="card heroCard">
+      <span class="eyebrow">Geometria fractal</span>
+      <h1>Fractals</h1>
+      <p class="lead">
+        Esta ventana genera computacionalmente seis fractales clasicos y estima su dimension
+        fractal con <code>box-counting</code> sobre una version discretizada del objeto. Cuando existe
+        una referencia teorica clara, tambien se muestra el valor esperado para comparar.
+      </p>
+    </section>
+
+    <form id="fractalsForm" class="card">
+      <div class="row denseRow">
+        <label class="field">
+          <span>Fractal</span>
+          <select name="fractal">
+            <option value="mandelbrot" {% if default_fractal == 'mandelbrot' %}selected{% endif %}>Conjunto de Mandelbrot</option>
+            <option value="julia" {% if default_fractal == 'julia' %}selected{% endif %}>Conjunto de Julia</option>
+            <option value="sierpinski_triangle" {% if default_fractal == 'sierpinski_triangle' %}selected{% endif %}>Triangulo de Sierpinski</option>
+            <option value="sierpinski_carpet" {% if default_fractal == 'sierpinski_carpet' %}selected{% endif %}>Carpeta de Sierpinski</option>
+            <option value="cantor" {% if default_fractal == 'cantor' %}selected{% endif %}>Conjunto de Cantor</option>
+            <option value="koch" {% if default_fractal == 'koch' %}selected{% endif %}>Copo de nieve de Koch</option>
+          </select>
+        </label>
+        <button type="submit">Generar</button>
+        <button type="button" id="resetFractals" class="secondary">Reset</button>
+      </div>
+      <div class="hint">
+        Todas las figuras se renderizan sobre fondo negro con trazos y conjuntos en blanco puro.
+      </div>
+    </form>
+
+    <section class="statsGrid">
+      <article class="card statCard">
+        <div class="small">Fractal activo</div>
+        <div class="statValue" id="activeFractal">-</div>
+        <div class="small" id="fractalNotes">Selecciona un fractal y pulsa generar.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Dimension estimada</div>
+        <div class="statValue" id="fractalDimension">-</div>
+        <div class="small">Estimacion box-counting sobre el objeto discretizado.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Valor esperado</div>
+        <div class="statValue" id="expectedDimension">-</div>
+        <div class="small">Si no existe un unico valor teorico, se deja como referencia abierta.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Metodo</div>
+        <div class="statValue" id="dimensionMethod">-</div>
+        <div class="small">Compara la estimacion contra la referencia cuando aplica.</div>
+      </article>
+    </section>
+
+    <section class="erGrid">
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Objeto fractal generado</h2>
+          <div class="small">Render en canvas, monocromatico y escalado para ocupar mejor el panel.</div>
+        </div>
+        <div class="networkFigureFrame fractalFrame">
+          <canvas id="fractalCanvas" class="fractalCanvas" width="760" height="760" style="display:none;"></canvas>
+          <div id="fractalPlaceholder" class="networkPlaceholder">Genera un fractal para verlo aqui.</div>
+        </div>
+      </article>
+
+      <article class="card fractalDetailsCard">
+        <div class="sectionHeader">
+          <h2>Referencia matematica</h2>
+          <div class="small">Criterio usado para la estimacion y referencia teorica cuando exista.</div>
+        </div>
+        <div class="formulaPanel">
+          <div class="small">Formula o criterio</div>
+          <div id="dimensionFormula" class="formulaValue">-</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Tabla de resultados</h2>
+        <div class="small">Cada generacion se agrega a la tabla hasta pulsar reset.</div>
+      </div>
+      <div class="tableWrap">
+        <table id="fractalsTable">
+          <thead>
+            <tr>
+              <th>Fractal</th>
+              <th>Dimension estimada</th>
+              <th>Valor esperado</th>
+              <th>Metodo</th>
+              <th>Formula / criterio</th>
+              <th>Notas</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let activeAnimation = null;
+
+    function fmt(value, digits = 6) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return Number(value).toFixed(digits);
+    }
+
+    function fmtExpected(value) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) {
+        return "Sin valor unico";
+      }
+      return fmt(value, 6);
+    }
+
+    function stopAnimation() {
+      if (activeAnimation !== null) {
+        cancelAnimationFrame(activeAnimation);
+        activeAnimation = null;
+      }
+    }
+
+    function canvasSetup(background = "#000000") {
+      const canvas = document.getElementById("fractalCanvas");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = false;
+      return { canvas, ctx };
+    }
+
+    function grayscaleEscape(iter, maxIter, inside = false) {
+      if (inside) return [255, 255, 255];
+      return [0, 0, 0];
+    }
+
+    function drawEscapeGrid(render) {
+      stopAnimation();
+      const { canvas, ctx } = canvasSetup("#000000");
+      const width = render.width;
+      const height = render.height;
+      const maxIter = render.max_iter;
+      const values = render.values;
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tempCtx = tempCanvas.getContext("2d");
+      const image = tempCtx.createImageData(width, height);
+
+      let row = 0;
+      function step() {
+        const rowsPerFrame = 12;
+        for (let local = 0; local < rowsPerFrame && row < height; local++, row++) {
+          for (let x = 0; x < width; x++) {
+            const idx = row * width + x;
+            const iter = values[idx];
+            const inside = iter >= maxIter;
+            const [r, g, b] = grayscaleEscape(iter, maxIter, inside);
+            const offset = idx * 4;
+            image.data[offset] = r;
+            image.data[offset + 1] = g;
+            image.data[offset + 2] = b;
+            image.data[offset + 3] = 255;
+          }
+        }
+
+        tempCtx.putImageData(image, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+        if (row < height) {
+          activeAnimation = requestAnimationFrame(step);
+        } else {
+          activeAnimation = null;
+        }
+      }
+
+      step();
+    }
+
+    function drawChaosGame(render) {
+      stopAnimation();
+      const { canvas, ctx } = canvasSetup();
+      const vertices = render.vertices;
+      let point = [...render.seed];
+      const totalSteps = render.steps;
+      const triHeight = Math.sqrt(3) / 2;
+      const usableW = canvas.width * 0.92;
+      const usableH = canvas.height * 0.88;
+      const scale = Math.min(usableW, usableH / triHeight);
+      const offsetX = (canvas.width - scale) / 2;
+      const offsetY = (canvas.height - scale * triHeight) / 2;
+
+      ctx.fillStyle = "#ffffff";
+
+      let done = 0;
+      function step() {
+        const batch = 2600;
+        for (let i = 0; i < batch && done < totalSteps; i++, done++) {
+          const vertex = vertices[Math.floor(Math.random() * vertices.length)];
+          point[0] = (point[0] + vertex[0]) / 2;
+          point[1] = (point[1] + vertex[1]) / 2;
+          const x = offsetX + point[0] * scale;
+          const y = canvas.height - (offsetY + point[1] * scale);
+          ctx.fillRect(x, y, 1.3, 1.3);
+        }
+
+        if (done < totalSteps) {
+          activeAnimation = requestAnimationFrame(step);
+        } else {
+          activeAnimation = null;
+        }
+      }
+
+      step();
+    }
+
+    function paintCarpetSquare(ctx, x, y, size, level) {
+      if (level === 0) {
+        ctx.fillRect(x, y, size, size);
+        return;
+      }
+      const third = size / 3;
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+          if (row === 1 && col === 1) continue;
+          paintCarpetSquare(ctx, x + col * third, y + row * third, third, level - 1);
+        }
+      }
+    }
+
+    function drawCarpet(render) {
+      stopAnimation();
+      const { canvas, ctx } = canvasSetup();
+      ctx.fillStyle = "#ffffff";
+      const margin = canvas.width * 0.035;
+      const size = canvas.width - 2 * margin;
+      paintCarpetSquare(ctx, margin, margin, size, render.level);
+    }
+
+    function drawCantor(render) {
+      stopAnimation();
+      const { canvas, ctx } = canvasSetup();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineCap = "square";
+
+      const levels = render.level + 1;
+      let segments = [[0, 1]];
+      const top = canvas.height * 0.10;
+      const gap = (canvas.height * 0.78) / Math.max(1, levels - 1);
+      const left = canvas.width * 0.05;
+      const usable = canvas.width * 0.90;
+
+      for (let depth = 0; depth < levels; depth++) {
+        ctx.lineWidth = Math.max(3, 14 - depth * 1.35);
+        const y = top + depth * gap;
+        for (const [start, end] of segments) {
+          ctx.beginPath();
+          ctx.moveTo(left + start * usable, y);
+          ctx.lineTo(left + end * usable, y);
+          ctx.stroke();
+        }
+
+        const nextSegments = [];
+        for (const [start, end] of segments) {
+          const third = (end - start) / 3;
+          nextSegments.push([start, start + third], [end - third, end]);
+        }
+        segments = nextSegments;
+      }
+    }
+
+    function kochEdge(start, end, order) {
+      let points = [start, end];
+      const cos60 = 0.5;
+      const sin60 = Math.sqrt(3) / 2;
+      for (let step = 0; step < order; step++) {
+        const next = [points[0]];
+        for (let i = 0; i < points.length - 1; i++) {
+          const [x1, y1] = points[i];
+          const [x2, y2] = points[i + 1];
+          const dx = (x2 - x1) / 3;
+          const dy = (y2 - y1) / 3;
+          const p1 = [x1 + dx, y1 + dy];
+          const p3 = [x1 + 2 * dx, y1 + 2 * dy];
+          const peak = [
+            p1[0] + dx * cos60 + dy * sin60,
+            p1[1] - dx * sin60 + dy * cos60,
+          ];
+          next.push(p1, peak, p3, [x2, y2]);
+        }
+        points = next;
+      }
+      return points;
+    }
+
+    function kochSnowflakePolyline(order) {
+      const left = [0, 0];
+      const right = [1, 0];
+      const top = [0.5, Math.sqrt(3) / 2];
+      const edges = [
+        kochEdge(left, right, order),
+        kochEdge(right, top, order),
+        kochEdge(top, left, order),
+      ];
+      const path = [];
+      edges.forEach((edge, index) => {
+        if (index === 0) {
+          path.push(...edge);
+        } else {
+          path.push(...edge.slice(1));
+        }
+      });
+      return path;
+    }
+
+    function drawKoch(render) {
+      stopAnimation();
+      const { canvas, ctx } = canvasSetup();
+      const points = kochSnowflakePolyline(render.order);
+      const xs = points.map(([x]) => x);
+      const ys = points.map(([, y]) => y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const usableWidth = canvas.width * 0.78;
+      const usableHeight = canvas.height * 0.78;
+      const scale = Math.min(
+        usableWidth / Math.max(1e-9, maxX - minX),
+        usableHeight / Math.max(1e-9, maxY - minY)
+      );
+      const offsetX = (canvas.width - (maxX - minX) * scale) / 2;
+      const offsetY = (canvas.height - (maxY - minY) * scale) / 2;
+      const projected = points.map(([x, y]) => [
+        offsetX + (x - minX) * scale,
+        canvas.height - (offsetY + (y - minY) * scale),
+      ]);
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.7;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      projected.forEach(([px, py], idx) => {
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    function drawRender(render) {
+      if (render.kind === "escape_grid") {
+        drawEscapeGrid(render);
+        return;
+      }
+      if (render.kind === "chaos_game") {
+        drawChaosGame(render);
+        return;
+      }
+      if (render.kind === "carpet") {
+        drawCarpet(render);
+        return;
+      }
+      if (render.kind === "cantor") {
+        drawCantor(render);
+        return;
+      }
+      if (render.kind === "koch") {
+        drawKoch(render);
+      }
+    }
+
+    function addRow(data) {
+      const tbody = document.querySelector("#fractalsTable tbody");
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${data.label}</td>
+        <td>${fmt(data.dimension, 6)}</td>
+        <td>${fmtExpected(data.expected_dimension)}</td>
+        <td>${data.dimension_method}</td>
+        <td>${data.formula}</td>
+        <td>${data.notes}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    function renderFractal(data) {
+      document.getElementById("activeFractal").textContent = data.label;
+      document.getElementById("fractalDimension").textContent = fmt(data.dimension, 6);
+      document.getElementById("expectedDimension").textContent = fmtExpected(data.expected_dimension);
+      document.getElementById("dimensionMethod").textContent = data.dimension_method;
+      document.getElementById("dimensionFormula").textContent = data.formula;
+      document.getElementById("fractalNotes").textContent = data.notes;
+
+      const placeholder = document.getElementById("fractalPlaceholder");
+      const canvas = document.getElementById("fractalCanvas");
+      canvas.style.display = "block";
+      placeholder.style.display = "none";
+      drawRender(data.render);
+    }
+
+    function resetFractalsView() {
+      stopAnimation();
+      document.querySelector("#fractalsTable tbody").innerHTML = "";
+      document.getElementById("activeFractal").textContent = "-";
+      document.getElementById("fractalDimension").textContent = "-";
+      document.getElementById("expectedDimension").textContent = "-";
+      document.getElementById("dimensionMethod").textContent = "-";
+      document.getElementById("dimensionFormula").textContent = "-";
+      document.getElementById("fractalNotes").textContent = "Selecciona un fractal y pulsa generar.";
+
+      const { ctx, canvas } = canvasSetup();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      canvas.style.display = "none";
+      document.getElementById("fractalPlaceholder").style.display = "flex";
+    }
+
+    document.getElementById("fractalsForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const fd = new FormData(event.target);
+      const response = await fetch("/process_fractals", {
+        method: "POST",
+        body: fd
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      renderFractal(data);
+      addRow(data);
+    });
+
+    document.getElementById("resetFractals").addEventListener("click", () => {
+      document.getElementById("fractalsForm").reset();
+      resetFractalsView();
+    });
+  </script>
+</body>
+</html>

@@ -317,6 +317,11 @@ code{
   padding: 10px;
 }
 
+.fractalFrame{
+  min-height: 620px;
+  background: #020202;
+}
+
 .networkFigureImage{
   width: 100%;
   height: auto;
@@ -324,8 +329,17 @@ code{
   display: none;
 }
 
+.fractalCanvas{
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  background: #020202;
+  display: block;
+}
+
 .networkPlaceholder{
-  color: var(--muted);
+  color: #9ca3af;
   font-size: 14px;
   text-align: center;
   width: 100%;
@@ -334,6 +348,30 @@ code{
   align-items:center;
   justify-content:center;
   padding: 18px;
+}
+
+.fractalDetailsCard{
+  display:flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.formulaPanel{
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  padding: 16px;
+  min-height: 180px;
+}
+
+.formulaValue{
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text);
+  margin-top: 10px;
+  word-break: break-word;
 }
 
 @media (max-width: 920px){

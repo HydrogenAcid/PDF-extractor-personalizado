@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exponente de Hurst</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+      <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+      <a href="/small_world" class="navLink {% if request.path == '/small_world' %}active{% endif %}">Small-World</a>
+      <a href="/erdos_renyi" class="navLink {% if request.path == '/erdos_renyi' %}active{% endif %}">Erdos Renyi</a>
+      <a href="/fractals" class="navLink {% if request.path == '/fractals' %}active{% endif %}">Fractals</a>
+      <a href="/hurst" class="navLink {% if request.path == '/hurst' %}active{% endif %}">Hurst</a>
+    </nav>
+  </aside>
+
+  <main class="main pageFade">
+    <section class="card heroCard">
+      <span class="eyebrow">Movimiento Browniano</span>
+      <h1>Exponente de Hurst con la Ec. 19</h1>
+      <p class="lead">
+        Esta vista estima el exponente de Hurst usando la relaci&oacute;n de autoafinidad
+        <code>f(x_0 + \lambda x) - f(x_0) \approx \lambda^H (f(x_0 + x) - f(x_0))</code>.
+        En la pr&aacute;ctica se ajusta la pendiente de <code>log std(X_{t+\lambda} - X_t)</code> contra
+        <code>log \lambda</code>. La validaci&oacute;n usa ruido blanco, donde el resultado debe acercarse a
+        <code>H \approx 0</code>.
+      </p>
+      <div class="formulaStrip">
+        <div class="formulaChip"><strong>Estimador:</strong> <code>S(\lambda) = std(X_{t+\lambda} - X_t)</code></div>
+        <div class="formulaChip"><strong>Ajuste:</strong> <code>log S(\lambda) \approx H log \lambda + c</code></div>
+        <div class="formulaChip"><strong>Validaci&oacute;n:</strong>
+          <code>np.random.normal(0,1) -&gt; H \approx 0</code>
+        </div>
+      </div>
+    </section>
+
+    <form id="hurstForm" class="card">
+      <div class="row denseRow">
+        <button type="submit">Calcular mes anterior</button>
+        <button type="button" id="resetHurst" class="secondary">Reset</button>
+      </div>
+      <div class="hint">
+        Si hoy estamos en abril, se descargan las series diarias de marzo. La serie de mercado se
+        muestra normalizada a base 100 solo para comparar trayectorias de instrumentos con precios distintos.
+      </div>
+    </form>
+
+    <section class="statsGrid">
+      <article class="card statCard">
+        <div class="small">Periodo</div>
+        <div class="statValue" id="periodLabel">-</div>
+        <div class="small" id="periodDates">Listo para calcular.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Series de mercado</div>
+        <div class="statValue" id="seriesCount">-</div>
+        <div class="small">VOO, NVDA y Gap (GAP).</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">H ruido blanco</div>
+        <div class="statValue" id="whiteNoiseH">-</div>
+        <div class="small">Debe acercarse a 0.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Estado</div>
+        <div class="statValue" id="statusLabel">Pendiente</div>
+        <div class="small" id="statusDetail">Calcula la estimaci&oacute;n con la Ec. 19.</div>
+      </article>
+    </section>
+
+    <section class="card" id="warningCard" style="display:none;">
+      <div class="sectionHeader">
+        <h2>Avisos</h2>
+        <div class="small">Si alguna serie no pudo descargarse, aparecer&aacute; aqu&iacute;.</div>
+      </div>
+      <div id="warningBody" class="hint"></div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Metodolog&iacute;a</h2>
+        <div class="tableWrap">
+          <table>
+            <tbody>
+              <tr>
+                <th>Fuente en tiempo real</th>
+                <td id="sourceName">Yahoo Finance</td>
+              </tr>
+              <tr>
+                <th>Endpoint</th>
+                <td id="sourceEndpoint">-</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Series financieras del mes anterior</h2>
+        <div class="small">Valores normalizados a base 100 para comparar la din&aacute;mica del mismo periodo.</div>
+      </div>
+      <canvas id="marketChart"></canvas>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Validaci&oacute;n con ruido blanco</h2>
+        <div class="small">Serie simulada con <code>np.random.normal(0,1)</code>. Aqu&iacute; el exponente debe
+          acercarse a 0.</div>
+      </div>
+      <canvas id="noiseChart"></canvas>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Tabla de exponentes de Hurst</h2>
+        <div class="small">Cada fila muestra la estimaci&oacute;n usando el ajuste log-log derivado de la Ec. 19.</div>
+      </div>
+      <div class="tableWrap">
+        <table id="hurstTable">
+          <thead>
+            <tr>
+              <th>Serie</th>
+              <th>Ticker</th>
+              <th>Periodo</th>
+              <th>Observaciones</th>
+              <th>Primer valor</th>
+              <th>&Uacute;ltimo valor</th>
+              <th>H estimado</th>
+              <th>Referencia</th>
+              <th>Interpretaci&oacute;n</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const palette = ["#4f46e5", "#ef4444", "#10b981", "#f59e0b", "#06b6d4", "#8b5cf6"];
+    let marketChart = null;
+    let noiseChart = null;
+
+    function fmt(value, digits = 6) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return Number(value).toFixed(digits);
+    }
+
+    function ensureCharts() {
+      if (!marketChart) {
+        marketChart = new Chart(document.getElementById("marketChart"), {
+          type: "line",
+          data: { labels: [], datasets: [] },
+          options: {
+            responsive: true,
+            interaction: { mode: "nearest", intersect: false },
+            scales: {
+              x: { title: { display: true, text: "Fecha" } },
+              y: { title: { display: true, text: "Base 100" } }
+            },
+            plugins: { legend: { position: "bottom" } },
+            elements: { point: { radius: 2 }, line: { tension: 0.15 } }
+          }
+        });
+      }
+
+      if (!noiseChart) {
+        noiseChart = new Chart(document.getElementById("noiseChart"), {
+          type: "line",
+          data: { labels: [], datasets: [] },
+          options: {
+            responsive: true,
+            interaction: { mode: "nearest", intersect: false },
+            scales: {
+              x: { title: { display: true, text: "&Iacute;ndice" } },
+              y: { title: { display: true, text: "Valor" } }
+            },
+            plugins: { legend: { position: "bottom" } },
+            elements: { point: { radius: 0 }, line: { tension: 0.12 } }
+          }
+        });
+      }
+    }
+
+    function renderWarnings(errors) {
+      const card = document.getElementById("warningCard");
+      const body = document.getElementById("warningBody");
+      if (!errors || !errors.length) {
+        card.style.display = "none";
+        body.innerHTML = "";
+        return;
+      }
+      card.style.display = "block";
+      body.innerHTML = errors.map(item => `<div>${item}</div>`).join("");
+    }
+
+    function renderSummary(data) {
+      document.getElementById("periodLabel").textContent = data.period.label;
+      document.getElementById("periodDates").textContent = `${data.period.start} a ${data.period.end_inclusive}`;
+      document.getElementById("seriesCount").textContent = data.series_count;
+      document.getElementById("whiteNoiseH").textContent = fmt(data.validation.hurst, 6);
+      document.getElementById("statusLabel").textContent = data.series_count > 0 ? "Completado" : "Solo validacion";
+      document.getElementById("statusDetail").textContent =
+        data.series_count > 0
+          ? "Se descargaron series reales y se calculo H."
+          : "No hubo series de mercado disponibles, pero la validacion local si corrio.";
+    }
+
+    function renderMethodology(data) {
+      document.getElementById("sourceName").textContent = data.source.name;
+      document.getElementById("sourceEndpoint").textContent = `${data.source.endpoint} (${data.source.interval})`;
+    }
+
+    function renderMarketChart(data) {
+      ensureCharts();
+      if (!data.market_series.length) {
+        marketChart.data.labels = [];
+        marketChart.data.datasets = [];
+        marketChart.update();
+        return;
+      }
+
+      marketChart.data.labels = data.market_series[0].dates;
+      marketChart.data.datasets = data.market_series.map((series, index) => ({
+        label: series.label,
+        data: series.normalized,
+        borderColor: palette[index % palette.length],
+        backgroundColor: palette[index % palette.length],
+        fill: false,
+      }));
+      marketChart.update();
+    }
+
+    function renderNoiseChart(data) {
+      ensureCharts();
+      noiseChart.data.labels = data.validation.index;
+      noiseChart.data.datasets = [{
+        label: `${data.validation.label} (H = ${fmt(data.validation.hurst, 6)})`,
+        data: data.validation.series,
+        borderColor: "#111827",
+        backgroundColor: "#111827",
+        fill: false,
+      }];
+      noiseChart.update();
+    }
+
+    function renderTable(data) {
+      const tbody = document.querySelector("#hurstTable tbody");
+      tbody.innerHTML = "";
+
+      data.market_series.forEach((series) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${series.label}</td>
+          <td>${series.symbol}</td>
+          <td>${data.period.label}</td>
+          <td>${series.points}</td>
+          <td>${fmt(series.first_close, 4)}</td>
+          <td>${fmt(series.last_close, 4)}</td>
+          <td>${fmt(series.hurst, 6)}</td>
+          <td>Serie real del mercado</td>
+          <td>${series.interpretation}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${data.validation.label}</td>
+        <td>${data.validation.symbol}</td>
+        <td>Validacion local</td>
+        <td>${data.validation.points}</td>
+        <td>-</td>
+        <td>-</td>
+        <td>${fmt(data.validation.hurst, 6)}</td>
+        <td>H ~ 0</td>
+        <td>${data.validation.interpretation}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    function resetView() {
+      document.getElementById("periodLabel").textContent = "-";
+      document.getElementById("periodDates").textContent = "Listo para calcular.";
+      document.getElementById("seriesCount").textContent = "-";
+      document.getElementById("whiteNoiseH").textContent = "-";
+      document.getElementById("statusLabel").textContent = "Pendiente";
+      document.getElementById("statusDetail").textContent = "Calcula la estimacion con la Ec. 19.";
+      document.getElementById("sourceName").textContent = "Yahoo Finance";
+      document.getElementById("sourceEndpoint").textContent = "-";
+      document.querySelector("#hurstTable tbody").innerHTML = "";
+      renderWarnings([]);
+
+      if (marketChart) {
+        marketChart.data.labels = [];
+        marketChart.data.datasets = [];
+        marketChart.update();
+      }
+
+      if (noiseChart) {
+        noiseChart.data.labels = [];
+        noiseChart.data.datasets = [];
+        noiseChart.update();
+      }
+    }
+
+    async function loadHurst() {
+      document.getElementById("statusLabel").textContent = "Calculando...";
+      const response = await fetch("/process_hurst", { method: "POST" });
+      const data = await response.json();
+
+      renderSummary(data);
+      renderMethodology(data);
+      renderWarnings(data.errors);
+      renderMarketChart(data);
+      renderNoiseChart(data);
+      renderTable(data);
+    }
+
+    document.getElementById("hurstForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await loadHurst();
+    });
+
+    document.getElementById("resetHurst").addEventListener("click", () => {
+      resetView();
+    });
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await loadHurst();
+    });
+  </script>
+</body>
+
+</html>
