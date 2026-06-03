@@ -1,4 +1,4 @@
-# PDF Extractor Personalizado
+# Sistemas Complejos Fractales 
 
 Aplicacion web en Flask para analizar PDFs desde varias perspectivas:
 
