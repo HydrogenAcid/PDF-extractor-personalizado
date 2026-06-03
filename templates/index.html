@@ -10,6 +10,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="layout">
+  {% include "partials/welcome_intro.html" %}
+
   <aside class="sidebar">
     <div class="brand">Analizador</div>
 
@@ -21,6 +23,9 @@
   <a href="/erdos_renyi" class="navLink {% if request.path == '/erdos_renyi' %}active{% endif %}">Erdos Renyi</a>
   <a href="/fractals" class="navLink {% if request.path == '/fractals' %}active{% endif %}">Fractals</a>
   <a href="/hurst" class="navLink {% if request.path == '/hurst' %}active{% endif %}">Hurst</a>
+  <a href="/beta_series" class="navLink {% if request.path == '/beta_series' %}active{% endif %}">Beta-Series / MF-DFA</a>
+  <a href="/mfdfa_articulo" class="navLink {% if request.path == '/mfdfa_articulo' %}active{% endif %}">MF-DFA articulo</a>
+  <a href="/animacion_charles" class="navLink {% if request.path == '/animacion_charles' %}active{% endif %}">Animacion Charles</a>
     </nav>
   </aside>
 
@@ -35,18 +40,6 @@
     </div>
     <div class="hint">Sube PDFs uno por uno. Cada PDF se agrega a las gráficas con color distinto.</div>
   </form>
-
-  <section class="card featureCallout">
-    <div>
-      <div class="small">Nueva práctica</div>
-      <h2>Redes Small-World de Watts-Strogatz</h2>
-      <div class="hint calloutText">
-        Simula <code>Average Shortest Path</code> y <code>Average Clustering Coefficient</code> para
-        <code>p = 0</code> y <code>p = 1</code>, y reproduce la figura 2 del paper.
-      </div>
-    </div>
-    <a href="/small_world" class="navBtn">Abrir módulo</a>
-  </section>
 
   <section class="card">
     <div class="sectionHeader">

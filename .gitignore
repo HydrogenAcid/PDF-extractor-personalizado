@@ -1,8 +1,51 @@
-.venv/
+# Python
 __pycache__/
 *.pyc
-temp.pdf
-*.log
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Entornos locales
+.env
+.env.local
+venv/
+.venv/
+env/
+
+# Builds y cache
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage/
+.cache/
+
+# Sistema operativo e IDE
 .DS_Store
 Thumbs.db
-*.pdf
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Archivos temporales locales
+temp.pdf
+tmp/
+temp/
+
+# Salidas generadas en output/
+output/*
+!output/.gitkeep
+output/*.pdf
+output/*.png
+output/*.jpg
+output/**/*.pdf
+output/**/*.png
+output/**/*.jpg
+output/**/*.jpeg
+output/**/*.aux
+output/**/*.fdb_latexmk
+output/**/*.fls

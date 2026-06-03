@@ -17,7 +17,7 @@ Se incorporaron estos cambios:
 
 - nuevo archivo `small_world.py`
 - nueva vista `templates/small_world.html`
-- integracion de la ruta `/small_world` en `PDF-CustomE.py`
+- integracion de la ruta `/small_world` en `main.py`
 - enlace nuevo en el menu lateral de todas las ventanas
 - estilos adicionales en `static/style.css`
 - tarjeta informativa en la ventana principal para entrar al modulo small-world
@@ -43,16 +43,26 @@ Con ese texto base, cada modulo aplica un analisis distinto:
 ## Estructura del proyecto
 
 ```text
-PDF-CustomE.py
+main.py
 graph_text.py
 small_world.py
 vowels.py
 requirements.txt
 .gitignore
+assets/
+    logo.jpeg
+docs/
+    ARCHITECTURE.md
+src/
+    ui/
+    utils/
+    pdf/
 static/
     style.css
 templates/
     index.html
+    partials/
+        welcome_intro.html
     vocales.html
     grafo_texto.html
     small_world.html
@@ -60,7 +70,7 @@ templates/
 
 ## Script principal
 
-### `PDF-CustomE.py`
+### `main.py`
 
 Es el punto de entrada de la aplicacion.
 
@@ -355,7 +365,7 @@ pip install -r requirements.txt
 ### 5. Ejecutar el servidor
 
 ```bash
-python PDF-CustomE.py
+python main.py
 ```
 
 ### 6. Abrir en el navegador

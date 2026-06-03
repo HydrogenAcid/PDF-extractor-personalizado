@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MF-DFA articulo</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+      <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+      <a href="/small_world" class="navLink {% if request.path == '/small_world' %}active{% endif %}">Small-World</a>
+      <a href="/erdos_renyi" class="navLink {% if request.path == '/erdos_renyi' %}active{% endif %}">Erdos Renyi</a>
+      <a href="/fractals" class="navLink {% if request.path == '/fractals' %}active{% endif %}">Fractals</a>
+      <a href="/hurst" class="navLink {% if request.path == '/hurst' %}active{% endif %}">Hurst</a>
+      <a href="/beta_series" class="navLink {% if request.path == '/beta_series' %}active{% endif %}">Beta-Series / MF-DFA</a>
+      <a href="/mfdfa_articulo" class="navLink {% if request.path == '/mfdfa_articulo' %}active{% endif %}">MF-DFA articulo</a>
+      <a href="/animacion_charles" class="navLink {% if request.path == '/animacion_charles' %}active{% endif %}">Animacion Charles</a>
+    </nav>
+  </aside>
+
+  <main class="main pageFade">
+    <section class="card heroCard">
+      <span class="eyebrow">Kantelhardt et al. 2002</span>
+      <h1>MF-DFA: Fig. 1 y cascada binomial</h1>
+      <p class="lead">
+        Esta vista reproduce numericamente la figura de la pagina 94 del articulo y aplica MF-DFA
+        a la cascada binomial definida en el mismo trabajo para reconstruir la Fig. 2.
+      </p>
+      <div class="formulaStrip">
+        <div class="formulaChip"><strong>MF-DFA:</strong> <code>Fq(s) ~ s^{h(q)}</code></div>
+        <div class="formulaChip"><strong>Monofractal:</strong> <code>tau(q) = qH - 1</code></div>
+        <div class="formulaChip"><strong>Binomial:</strong> <code>x_k = a^n(1-a)^{nmax-n}</code></div>
+        <div class="formulaChip"><strong>Teoria:</strong> <code>tau(q) = -log2(a^q+(1-a)^q)</code></div>
+        <div class="formulaChip"><strong>Espectro:</strong> <code>alpha = d tau/dq, f(alpha)=q alpha-tau</code></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Figura 1: pagina 94</h2>
+        <div class="small">Reproduce los paneles (a), (b), (c), (d) y (e) con MF-DFA2. Los paneles (a)-(c) se muestran separados y ampliados para leerlos mejor.</div>
+      </div>
+      <form id="fig1Form">
+        <div class="row denseRow">
+          <label class="field">
+            <span>N</span>
+            <input type="number" name="fig1_n" min="4096" max="131072" step="1024" value="65536" required>
+          </label>
+          <label class="field">
+            <span>Grado DFA</span>
+            <input type="number" name="fig1_poly_degree" min="1" max="4" step="1" value="2" required>
+          </label>
+          <label class="field">
+            <span>Fit min</span>
+            <input type="number" name="fig1_fit_min" min="8" step="1" value="200" required>
+          </label>
+          <label class="field">
+            <span>Fit max</span>
+            <input type="number" name="fig1_fit_max" min="16" step="1" value="5000" required>
+          </label>
+          <label class="field">
+            <span>Semilla</span>
+            <input type="number" name="fig1_seed" step="1" value="20260601" required>
+          </label>
+          <button type="submit">Reproducir Fig. 1</button>
+          <button type="button" id="resetFig1" class="secondary">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="statsGrid">
+      <article class="card statCard">
+        <div class="small">Estado Fig. 1</div>
+        <div class="statValue" id="fig1Status">Pendiente</div>
+        <div class="small" id="fig1Detail">Listo para calcular los cinco paneles.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Longitud</div>
+        <div class="statValue" id="fig1N">-</div>
+        <div class="small">Articulo: N = 65536.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Ajuste</div>
+        <div class="statValue" id="fig1Fit">-</div>
+        <div class="small">Articulo: 200 &lt; s &lt; 5000.</div>
+      </article>
+    </section>
+
+    <section class="mfdfaArticleCharts">
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(a) Fq(s), H = 0.75</h2>
+        </div>
+        <div class="articleChartFrame articleChartFrameTall">
+          <canvas id="fig1H075Chart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(b) Fq(s), H = 0.50</h2>
+        </div>
+        <div class="articleChartFrame articleChartFrameTall">
+          <canvas id="fig1H050Chart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(c) Fq(s), H = 0.25</h2>
+        </div>
+        <div class="articleChartFrame articleChartFrameTall">
+          <canvas id="fig1H025Chart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(d) h(q)</h2>
+        </div>
+        <div class="articleChartFrame">
+          <canvas id="fig1HqChart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(e) tau(q)</h2>
+        </div>
+        <div class="articleChartFrame">
+          <canvas id="fig1TauChart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Figura 2: cascada binomial</h2>
+        <div class="small">Simula el modelo binomial de la pagina 95 y aplica MF-DFA para obtener los paneles (a)-(e).</div>
+      </div>
+      <form id="binomialForm">
+        <div class="row denseRow">
+          <label class="field">
+            <span>nmax</span>
+            <input type="number" name="binomial_nmax" min="8" max="17" step="1" value="16" required>
+          </label>
+          <label class="field">
+            <span>a</span>
+            <input type="number" name="binomial_a" min="0.55" max="0.95" step="0.01" value="0.75" required>
+          </label>
+          <label class="field">
+            <span>Grado DFA</span>
+            <input type="number" name="binomial_poly_degree" min="1" max="4" step="1" value="1" required>
+          </label>
+          <label class="field">
+            <span>Fit min</span>
+            <input type="number" name="binomial_fit_min" min="8" step="1" value="50" required>
+          </label>
+          <label class="field">
+            <span>Fit max</span>
+            <input type="number" name="binomial_fit_max" min="16" step="1" value="500" required>
+          </label>
+          <button type="submit">Aplicar MF-DFA</button>
+          <button type="button" id="resetBinomial" class="secondary">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="statsGrid">
+      <article class="card statCard">
+        <div class="small">Estado cascada</div>
+        <div class="statValue" id="binomialStatus">Pendiente</div>
+        <div class="small" id="binomialDetail">Listo para simular.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">N</div>
+        <div class="statValue" id="binomialN">-</div>
+        <div class="small">N = 2^nmax.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Parametro a</div>
+        <div class="statValue" id="binomialA">-</div>
+        <div class="small">Articulo: a = 0.75 para Fig. 2.</div>
+      </article>
+    </section>
+
+    <section class="mfdfaArticleCharts">
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(a) Cascada binomial</h2>
+        </div>
+        <div class="articleChartFrame">
+          <canvas id="cascadeSeriesChart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(b) Fq(s) de la cascada</h2>
+        </div>
+        <div class="articleChartFrame articleChartFrameTall">
+          <canvas id="cascadeFqChart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(c) h(q): numerico vs teorico</h2>
+        </div>
+        <div class="articleChartFrame">
+          <canvas id="cascadeHqChart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(d) tau(q): numerico vs teorico</h2>
+        </div>
+        <div class="articleChartFrame">
+          <canvas id="cascadeTauChart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>(e) f(alpha): espectro de singularidad</h2>
+        </div>
+        <div class="articleChartFrame">
+          <canvas id="cascadeSpectrumChart" class="articleChartCanvas"></canvas>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const palette = ["#4f46e5", "#0f766e", "#e11d48", "#b45309", "#0891b2", "#7c3aed", "#111827"];
+    const chartRefs = {};
+
+    function fmt(value, digits = 6) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return Number(value).toFixed(digits);
+    }
+
+    function ensureScatterChart(id, xLabel, yLabel, logAxes = false) {
+      if (chartRefs[id]) return chartRefs[id];
+      chartRefs[id] = new Chart(document.getElementById(id), {
+        type: "scatter",
+        data: { datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "nearest", intersect: false },
+          scales: {
+            x: { type: logAxes ? "logarithmic" : "linear", title: { display: true, text: xLabel } },
+            y: { type: logAxes ? "logarithmic" : "linear", title: { display: true, text: yLabel } }
+          },
+          plugins: { legend: { position: "bottom" } },
+          elements: { point: { radius: 3 }, line: { tension: 0.08 } }
+        }
+      });
+      return chartRefs[id];
+    }
+
+    function ensureLineChart(id, xLabel, yLabel) {
+      if (chartRefs[id]) return chartRefs[id];
+      chartRefs[id] = new Chart(document.getElementById(id), {
+        type: "line",
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "nearest", intersect: false },
+          scales: {
+            x: { title: { display: true, text: xLabel } },
+            y: { title: { display: true, text: yLabel } }
+          },
+          plugins: { legend: { position: "bottom" } },
+          elements: { point: { radius: 0 }, line: { tension: 0.08 } }
+        }
+      });
+      return chartRefs[id];
+    }
+
+    function resetChart(id) {
+      const chart = chartRefs[id];
+      if (!chart) return;
+      chart.data.labels = [];
+      chart.data.datasets = [];
+      chart.update();
+    }
+
+    function fluctuationDatasets(curves) {
+      const datasets = [];
+      curves.forEach((curve, index) => {
+        const color = palette[index % palette.length];
+        datasets.push({
+          label: `q=${fmt(curve.q, 1)} puntos x${fmt(curve.shift, 0)}`,
+          data: curve.points,
+          borderColor: color,
+          backgroundColor: color,
+          showLine: false,
+          pointRadius: 3,
+        });
+        datasets.push({
+          label: `q=${fmt(curve.q, 1)} ajuste`,
+          data: curve.fit,
+          borderColor: color,
+          backgroundColor: color,
+          showLine: true,
+          pointRadius: 0,
+          borderWidth: 1.5,
+        });
+      });
+      return datasets;
+    }
+
+    function fig1FluctuationDatasets(curves, hurst) {
+      const datasets = [];
+      curves.forEach((curve, index) => {
+        const color = palette[index % palette.length];
+        datasets.push({
+          label: `q=${fmt(curve.q, 1)} x${fmt(curve.shift, 0)}`,
+          data: curve.points,
+          borderColor: color,
+          backgroundColor: color,
+          showLine: false,
+          pointRadius: 3,
+        });
+
+        const usable = curve.points.filter(point => point.x > 0 && point.y > 0);
+        if (usable.length >= 2) {
+          const first = usable[0];
+          const last = usable[usable.length - 1];
+          datasets.push({
+            label: `pendiente H=${fmt(hurst, 2)}`,
+            data: [
+              { x: first.x, y: first.y },
+              { x: last.x, y: first.y * Math.pow(last.x / first.x, hurst) },
+            ],
+            borderColor: "#111827",
+            backgroundColor: "#111827",
+            borderDash: [4, 4],
+            pointRadius: 0,
+            showLine: true,
+            borderWidth: 1,
+          });
+        }
+      });
+      return datasets;
+    }
+
+    function renderFluctuationChart(id, curves) {
+      const chart = ensureScatterChart(id, "s", "Fq(s)", true);
+      chart.data.datasets = fluctuationDatasets(curves);
+      chart.update();
+    }
+
+    function renderFig1FluctuationChart(id, item) {
+      const chart = ensureScatterChart(id, "s", "Fq(s)", true);
+      chart.data.datasets = fig1FluctuationDatasets(item.fluctuations, item.hurst);
+      chart.update();
+    }
+
+    function renderFig1(data) {
+      document.getElementById("fig1Status").textContent = "Completado";
+      document.getElementById("fig1Detail").textContent = `MF-DFA${data.params.poly_degree}, q seleccionados: ${data.params.selected_q.join(", ")}.`;
+      document.getElementById("fig1N").textContent = data.params.n;
+      document.getElementById("fig1Fit").textContent = `${data.params.fit_min}..${data.params.fit_max}`;
+
+      const byKey = Object.fromEntries(data.cases.map(item => [item.key, item]));
+      renderFig1FluctuationChart("fig1H075Chart", byKey.h075);
+      renderFig1FluctuationChart("fig1H050Chart", byKey.h050);
+      renderFig1FluctuationChart("fig1H025Chart", byKey.h025);
+
+      const hChart = ensureScatterChart("fig1HqChart", "q", "h(q)");
+      hChart.data.datasets = [];
+      data.cases.forEach((item, index) => {
+        const color = palette[index % palette.length];
+        hChart.data.datasets.push({
+          label: `${item.label} numerico`,
+          data: item.hq,
+          borderColor: color,
+          backgroundColor: color,
+          showLine: true,
+        });
+        hChart.data.datasets.push({
+          label: `${item.label} teoria`,
+          data: item.hq_theory,
+          borderColor: color,
+          backgroundColor: color,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          showLine: true,
+        });
+      });
+      hChart.update();
+
+      const tauChart = ensureScatterChart("fig1TauChart", "q", "tau(q)");
+      tauChart.data.datasets = [];
+      data.cases.forEach((item, index) => {
+        const color = palette[index % palette.length];
+        tauChart.data.datasets.push({
+          label: `${item.label} numerico`,
+          data: item.tau,
+          borderColor: color,
+          backgroundColor: color,
+          showLine: true,
+        });
+        tauChart.data.datasets.push({
+          label: `${item.label} teoria`,
+          data: item.tau_theory,
+          borderColor: color,
+          backgroundColor: color,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          showLine: true,
+        });
+      });
+      tauChart.update();
+    }
+
+    function renderBinomial(data) {
+      document.getElementById("binomialStatus").textContent = "Completado";
+      document.getElementById("binomialDetail").textContent = `MF-DFA${data.params.poly_degree}, ajuste ${data.params.fit_min}..${data.params.fit_max}.`;
+      document.getElementById("binomialN").textContent = data.params.n;
+      document.getElementById("binomialA").textContent = fmt(data.params.a, 2);
+
+      const seriesChart = ensureLineChart("cascadeSeriesChart", "Indice", "x_k");
+      seriesChart.data.labels = data.series.index;
+      seriesChart.data.datasets = [{
+        label: "Cascada binomial",
+        data: data.series.values,
+        borderColor: "#111827",
+        backgroundColor: "#111827",
+        fill: false,
+      }];
+      seriesChart.update();
+
+      renderFluctuationChart("cascadeFqChart", data.fluctuations);
+
+      const hChart = ensureScatterChart("cascadeHqChart", "q", "h(q)");
+      hChart.data.datasets = [
+        {
+          label: "MF-DFA numerico",
+          data: data.hq,
+          borderColor: "#4f46e5",
+          backgroundColor: "#4f46e5",
+          showLine: true,
+        },
+        {
+          label: "Teorico",
+          data: data.hq_theory,
+          borderColor: "#111827",
+          backgroundColor: "#111827",
+          borderDash: [5, 4],
+          pointRadius: 0,
+          showLine: true,
+        }
+      ];
+      hChart.update();
+
+      const tauChart = ensureScatterChart("cascadeTauChart", "q", "tau(q)");
+      tauChart.data.datasets = [
+        {
+          label: "MF-DFA numerico",
+          data: data.tau,
+          borderColor: "#0f766e",
+          backgroundColor: "#0f766e",
+          showLine: true,
+        },
+        {
+          label: "Teorico",
+          data: data.tau_theory,
+          borderColor: "#111827",
+          backgroundColor: "#111827",
+          borderDash: [5, 4],
+          pointRadius: 0,
+          showLine: true,
+        }
+      ];
+      tauChart.update();
+
+      const spectrumChart = ensureScatterChart("cascadeSpectrumChart", "alpha", "f(alpha)");
+      spectrumChart.data.datasets = [
+        {
+          label: "MF-DFA numerico",
+          data: data.spectrum,
+          borderColor: "#e11d48",
+          backgroundColor: "#e11d48",
+          showLine: true,
+        },
+        {
+          label: "Teorico",
+          data: data.spectrum_theory,
+          borderColor: "#111827",
+          backgroundColor: "#111827",
+          borderDash: [5, 4],
+          pointRadius: 0,
+          showLine: true,
+        }
+      ];
+      spectrumChart.update();
+
+    }
+
+    function resetFig1() {
+      document.getElementById("fig1Status").textContent = "Pendiente";
+      document.getElementById("fig1Detail").textContent = "Listo para calcular los cinco paneles.";
+      document.getElementById("fig1N").textContent = "-";
+      document.getElementById("fig1Fit").textContent = "-";
+      ["fig1H075Chart", "fig1H050Chart", "fig1H025Chart", "fig1HqChart", "fig1TauChart"].forEach(resetChart);
+    }
+
+    function resetBinomial() {
+      document.getElementById("binomialStatus").textContent = "Pendiente";
+      document.getElementById("binomialDetail").textContent = "Listo para simular.";
+      document.getElementById("binomialN").textContent = "-";
+      document.getElementById("binomialA").textContent = "-";
+      ["cascadeSeriesChart", "cascadeFqChart", "cascadeHqChart", "cascadeTauChart", "cascadeSpectrumChart"].forEach(resetChart);
+    }
+
+    document.getElementById("fig1Form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      document.getElementById("fig1Status").textContent = "Calculando...";
+      const response = await fetch("/process_mfdfa_article_fig1", {
+        method: "POST",
+        body: new FormData(event.target)
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        document.getElementById("fig1Status").textContent = "Error";
+        return;
+      }
+      renderFig1(data);
+    });
+
+    document.getElementById("binomialForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      document.getElementById("binomialStatus").textContent = "Calculando...";
+      const response = await fetch("/process_binomial_cascade", {
+        method: "POST",
+        body: new FormData(event.target)
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        document.getElementById("binomialStatus").textContent = "Error";
+        return;
+      }
+      renderBinomial(data);
+    });
+
+    document.getElementById("resetFig1").addEventListener("click", () => {
+      document.getElementById("fig1Form").reset();
+      resetFig1();
+    });
+
+    document.getElementById("resetBinomial").addEventListener("click", () => {
+      document.getElementById("binomialForm").reset();
+      resetBinomial();
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      ensureScatterChart("fig1H075Chart", "s", "Fq(s)", true);
+      ensureScatterChart("fig1H050Chart", "s", "Fq(s)", true);
+      ensureScatterChart("fig1H025Chart", "s", "Fq(s)", true);
+      ensureScatterChart("fig1HqChart", "q", "h(q)");
+      ensureScatterChart("fig1TauChart", "q", "tau(q)");
+      ensureLineChart("cascadeSeriesChart", "Indice", "x_k");
+      ensureScatterChart("cascadeFqChart", "s", "Fq(s)", true);
+      ensureScatterChart("cascadeHqChart", "q", "h(q)");
+      ensureScatterChart("cascadeTauChart", "q", "tau(q)");
+      ensureScatterChart("cascadeSpectrumChart", "alpha", "f(alpha)");
+    });
+  </script>
+</body>
+
+</html>

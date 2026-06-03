@@ -1,4 +1,4 @@
-# PDF-CustomE.py
+# main.py
 from flask import Flask, render_template, request, jsonify
 import os, re, math
 from collections import Counter
@@ -12,14 +12,22 @@ from small_world import register_small_world
 from erdos_renyi import register_erdos_renyi
 from fractals import register_fractals
 from hurst import register_hurst
+from animacion_charles import register_animacion_charles
+from beta_series import register_beta_series
+from mfdfa_article import register_mfdfa_article
+from src.ui.welcome import register_welcome_assets
 
 app = Flask(__name__)
+register_welcome_assets(app)
 register_vowels(app)  # registra rutas de vowels.py en esta app
 register_graph_text(app)  # registra rutas de graph_text.py en esta app
 register_small_world(app)  # registra rutas de small_world.py en esta app
 register_erdos_renyi(app)  # registra rutas de erdos_renyi.py en esta app
 register_fractals(app)  # registra rutas de fractals.py en esta app
 register_hurst(app)  # registra rutas de hurst.py en esta app
+register_animacion_charles(app)  # registra rutas de animacion_charles.py en esta app
+register_beta_series(app)  # registra rutas de beta_series.py en esta app
+register_mfdfa_article(app)  # registra rutas de mfdfa_article.py en esta app
 WORD_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+")
 
 # -------------------- Extracción (texto -> OCR fallback) --------------------

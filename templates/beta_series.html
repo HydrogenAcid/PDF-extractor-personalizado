@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Series beta y MF-DFA</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+      <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+      <a href="/small_world" class="navLink {% if request.path == '/small_world' %}active{% endif %}">Small-World</a>
+      <a href="/erdos_renyi" class="navLink {% if request.path == '/erdos_renyi' %}active{% endif %}">Erdos Renyi</a>
+      <a href="/fractals" class="navLink {% if request.path == '/fractals' %}active{% endif %}">Fractals</a>
+      <a href="/hurst" class="navLink {% if request.path == '/hurst' %}active{% endif %}">Hurst</a>
+      <a href="/beta_series" class="navLink {% if request.path == '/beta_series' %}active{% endif %}">Beta-Series / MF-DFA</a>
+      <a href="/mfdfa_articulo" class="navLink {% if request.path == '/mfdfa_articulo' %}active{% endif %}">MF-DFA articulo</a>
+      <a href="/animacion_charles" class="navLink {% if request.path == '/animacion_charles' %}active{% endif %}">Animacion Charles</a>
+    </nav>
+  </aside>
+
+  <main class="main pageFade">
+    <section class="card heroCard">
+      <span class="eyebrow">Fractalidad controlada</span>
+      <h1>Series beta y exponente de Holder</h1>
+      <p class="lead">
+        Esta pagina ejecuta dos practicas: el barrido de beta de <code>Beta_Series.ipynb</code>
+        contra un exponente fractal seleccionado, y MF-DFA sobre ruido blanco para estimar
+        el exponente de Holder.
+      </p>
+      <div class="formulaStrip">
+        <div class="formulaChip"><strong>Series beta:</strong> <code>|Y_f| ~ f^{-beta/2}</code></div>
+        <div class="formulaChip"><strong>DFA:</strong> <code>F(s) ~ s^alpha</code></div>
+        <div class="formulaChip"><strong>MF-DFA:</strong> <code>F_q(s) ~ s^{h(q)}</code></div>
+        <div class="formulaChip"><strong>Holder:</strong> <code>alpha = d tau(q) / dq</code></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Tarea 1: beta contra exponente fractal</h2>
+        <div class="small">Por defecto usa 10 realizaciones de longitud 5,000 y beta de -3 a 4.5.</div>
+      </div>
+
+      <form id="betaForm">
+        <div class="row denseRow">
+          <label class="field">
+            <span>Exponente</span>
+            <select name="estimator">
+              {% for key, label in estimators.items() %}
+              <option value="{{ key }}" {% if key == 'dfa' %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="field">
+            <span>Beta min</span>
+            <input type="number" name="beta_min" step="0.1" value="{{ defaults.beta_min }}" required>
+          </label>
+          <label class="field">
+            <span>Beta max</span>
+            <input type="number" name="beta_max" step="0.1" value="{{ defaults.beta_max }}" required>
+          </label>
+          <label class="field">
+            <span>Paso beta</span>
+            <input type="number" name="beta_step" min="0.1" step="0.1" value="{{ defaults.beta_step }}" required>
+          </label>
+          <label class="field">
+            <span>Longitud</span>
+            <input type="number" name="length_n" min="512" max="20000" step="1" value="{{ defaults.length_n }}" required>
+          </label>
+          <label class="field">
+            <span>Realizaciones</span>
+            <input type="number" name="realizations" min="1" max="50" step="1" value="{{ defaults.realizations }}" required>
+          </label>
+          <label class="field">
+            <span>Semilla</span>
+            <input type="number" name="seed" step="1" value="{{ defaults.seed }}" required>
+          </label>
+          <button type="submit">Calcular beta</button>
+          <button type="button" id="resetBeta" class="secondary">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="statsGrid">
+      <article class="card statCard">
+        <div class="small">Estado beta</div>
+        <div class="statValue" id="betaStatus">Pendiente</div>
+        <div class="small" id="betaStatusDetail">Configura el barrido y ejecuta.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Puntos beta</div>
+        <div class="statValue" id="betaPoints">-</div>
+        <div class="small">Valores de beta evaluados.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Exponente usado</div>
+        <div class="statValue" id="betaEstimator">-</div>
+        <div class="small">Promedio sobre realizaciones.</div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Promedio del exponente vs beta</h2>
+        <div class="small">La linea central es el promedio; las lineas punteadas muestran +/- una desviacion estandar. Para DFA, la referencia teorica se dibuja solo en el regimen central.</div>
+      </div>
+      <canvas id="betaChart"></canvas>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Archivos generados de tarea 1</h2>
+      </div>
+      <div class="tableWrap">
+        <table>
+          <tbody id="betaFiles"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Tabla beta</h2>
+      </div>
+      <div class="tableWrap">
+        <table id="betaTable">
+          <thead>
+            <tr>
+              <th>beta</th>
+              <th>Promedio</th>
+              <th>Desv. est.</th>
+              <th>Min</th>
+              <th>Max</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Tarea 2: MF-DFA y exponente de Holder</h2>
+        <div class="small">Se genera ruido blanco y se calcula h(q), tau(q) y alpha(q).</div>
+      </div>
+
+      <form id="mfdfaForm">
+        <div class="row denseRow">
+          <label class="field">
+            <span>Longitud</span>
+            <input type="number" name="mfdfa_length_n" min="512" max="50000" step="1" value="5000" required>
+          </label>
+          <label class="field">
+            <span>q min</span>
+            <input type="number" name="q_min" step="0.5" value="-5" required>
+          </label>
+          <label class="field">
+            <span>q max</span>
+            <input type="number" name="q_max" step="0.5" value="5" required>
+          </label>
+          <label class="field">
+            <span>Paso q</span>
+            <input type="number" name="q_step" min="0.1" step="0.1" value="0.5" required>
+          </label>
+          <label class="field">
+            <span>Grado</span>
+            <input type="number" name="poly_degree" min="1" max="3" step="1" value="1" required>
+          </label>
+          <label class="field">
+            <span>Semilla</span>
+            <input type="number" name="mfdfa_seed" step="1" value="20260527" required>
+          </label>
+          <button type="submit">Calcular MF-DFA</button>
+          <button type="button" id="resetMfdfa" class="secondary">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="statsGrid">
+      <article class="card statCard">
+        <div class="small">Estado MF-DFA</div>
+        <div class="statValue" id="mfdfaStatus">Pendiente</div>
+        <div class="small" id="mfdfaStatusDetail">Listo para calcular ruido blanco.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">h(q=0)</div>
+        <div class="statValue" id="hqZero">-</div>
+        <div class="small">Referencia de ruido blanco: 0.5.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Holder alpha q=0</div>
+        <div class="statValue" id="alphaZero">-</div>
+        <div class="small">Centro local del espectro.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">Holder alpha q=2</div>
+        <div class="statValue" id="alphaTwo">-</div>
+        <div class="small">Referencia local del segundo momento.</div>
+      </article>
+    </section>
+
+    <section class="erGrid">
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Ruido blanco</h2>
+        </div>
+        <canvas id="whiteSeriesChart"></canvas>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>h(q)</h2>
+        </div>
+        <canvas id="hqChart"></canvas>
+      </article>
+    </section>
+
+    <section class="erGrid">
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Holder alpha(q)</h2>
+        </div>
+        <canvas id="alphaChart"></canvas>
+      </article>
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Escalamiento Fq(s)</h2>
+        </div>
+        <canvas id="fluctuationChart"></canvas>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Archivos generados de tarea 2</h2>
+      </div>
+      <div class="tableWrap">
+        <table>
+          <tbody id="mfdfaFiles"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHeader">
+        <h2>Tabla MF-DFA</h2>
+      </div>
+      <div class="tableWrap">
+        <table id="mfdfaTable">
+          <thead>
+            <tr>
+              <th>q</th>
+              <th>h(q)</th>
+              <th>tau(q)</th>
+              <th>Holder alpha</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const palette = ["#4f46e5", "#0f766e", "#e11d48", "#b45309", "#0891b2", "#7c3aed"];
+    let betaChart = null;
+    let whiteSeriesChart = null;
+    let hqChart = null;
+    let alphaChart = null;
+    let fluctuationChart = null;
+
+    function fmt(value, digits = 6) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return Number(value).toFixed(digits);
+    }
+
+    function setFiles(tbodyId, files) {
+      const tbody = document.getElementById(tbodyId);
+      tbody.innerHTML = "";
+      Object.entries(files || {}).forEach(([label, path]) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<th>${label}</th><td><code>${path}</code></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function ensureBetaChart() {
+      if (betaChart) return;
+      betaChart = new Chart(document.getElementById("betaChart"), {
+        type: "line",
+        data: { datasets: [] },
+        options: {
+          responsive: true,
+          interaction: { mode: "nearest", intersect: false },
+          scales: {
+            x: { type: "linear", title: { display: true, text: "beta" } },
+            y: { title: { display: true, text: "exponente" } }
+          },
+          plugins: { legend: { position: "bottom" } },
+          elements: { point: { radius: 3 }, line: { tension: 0.12 } }
+        }
+      });
+    }
+
+    function ensureLineChart(canvasId, existingChart, xLabel, yLabel, pointRadius = 0) {
+      if (existingChart) return existingChart;
+      return new Chart(document.getElementById(canvasId), {
+        type: "line",
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          interaction: { mode: "nearest", intersect: false },
+          scales: {
+            x: { title: { display: true, text: xLabel } },
+            y: { title: { display: true, text: yLabel } }
+          },
+          plugins: { legend: { position: "bottom" } },
+          elements: { point: { radius: pointRadius }, line: { tension: 0.12 } }
+        }
+      });
+    }
+
+    function ensureScatterChart(canvasId, existingChart, xLabel, yLabel, logAxes = false) {
+      if (existingChart) return existingChart;
+      return new Chart(document.getElementById(canvasId), {
+        type: "scatter",
+        data: { datasets: [] },
+        options: {
+          responsive: true,
+          interaction: { mode: "nearest", intersect: false },
+          scales: {
+            x: { type: logAxes ? "logarithmic" : "linear", title: { display: true, text: xLabel } },
+            y: { type: logAxes ? "logarithmic" : "linear", title: { display: true, text: yLabel } }
+          },
+          plugins: { legend: { position: "bottom" } },
+          elements: { point: { radius: 3 }, line: { tension: 0.12 } }
+        }
+      });
+    }
+
+    function ensureMfdfaCharts() {
+      whiteSeriesChart = ensureLineChart("whiteSeriesChart", whiteSeriesChart, "Indice", "Valor");
+      hqChart = ensureScatterChart("hqChart", hqChart, "q", "h(q)");
+      alphaChart = ensureScatterChart("alphaChart", alphaChart, "q", "Holder alpha(q)");
+      fluctuationChart = ensureScatterChart("fluctuationChart", fluctuationChart, "s", "Fq(s)", true);
+    }
+
+    function renderBeta(data) {
+      ensureBetaChart();
+      const rows = data.rows;
+      const label = data.params.estimator_label;
+      const mean = rows.map(row => ({ x: row.beta, y: row.mean }));
+      const upper = rows.map(row => ({ x: row.beta, y: row.mean + row.std }));
+      const lower = rows.map(row => ({ x: row.beta, y: row.mean - row.std }));
+      betaChart.data.datasets = [
+        {
+          label: `${label} promedio`,
+          data: mean,
+          borderColor: "#4f46e5",
+          backgroundColor: "#4f46e5",
+          showLine: true,
+        },
+        {
+          label: "+1 desv. est.",
+          data: upper,
+          borderColor: "#9ca3af",
+          backgroundColor: "#9ca3af",
+          borderDash: [6, 4],
+          pointRadius: 0,
+          showLine: true,
+        },
+        {
+          label: "-1 desv. est.",
+          data: lower,
+          borderColor: "#9ca3af",
+          backgroundColor: "#9ca3af",
+          borderDash: [6, 4],
+          pointRadius: 0,
+          showLine: true,
+        }
+      ];
+
+      if (data.params.estimator === "dfa") {
+        const theoryRows = rows.filter(row => row.beta >= -1 && row.beta <= 3);
+        betaChart.data.datasets.push({
+          label: "Referencia central (beta + 1) / 2",
+          data: theoryRows.map(row => ({ x: row.beta, y: (row.beta + 1) / 2 })),
+          borderColor: "#0f766e",
+          backgroundColor: "#0f766e",
+          borderDash: [3, 4],
+          pointRadius: 0,
+          showLine: true,
+        });
+      }
+
+      betaChart.update();
+      document.getElementById("betaStatus").textContent = "Completado";
+      document.getElementById("betaStatusDetail").textContent = `${data.params.realizations} realizaciones de N=${data.params.length_n}.`;
+      document.getElementById("betaPoints").textContent = rows.length;
+      document.getElementById("betaEstimator").textContent = label;
+      setFiles("betaFiles", data.files);
+
+      const tbody = document.querySelector("#betaTable tbody");
+      tbody.innerHTML = "";
+      rows.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${fmt(row.beta, 4)}</td>
+          <td>${fmt(row.mean, 6)}</td>
+          <td>${fmt(row.std, 6)}</td>
+          <td>${fmt(row.min, 6)}</td>
+          <td>${fmt(row.max, 6)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderMfdfa(data) {
+      ensureMfdfaCharts();
+      document.getElementById("mfdfaStatus").textContent = "Completado";
+      document.getElementById("mfdfaStatusDetail").textContent = `Ruido blanco N=${data.params.length_n}, ${data.rows.length} valores q.`;
+      document.getElementById("hqZero").textContent = fmt(data.summary.hq_q0, 6);
+      document.getElementById("alphaZero").textContent = fmt(data.summary.holder_alpha_q0, 6);
+      document.getElementById("alphaTwo").textContent = fmt(data.summary.holder_alpha_q2, 6);
+      setFiles("mfdfaFiles", data.files);
+
+      whiteSeriesChart.data.labels = data.series.index;
+      whiteSeriesChart.data.datasets = [
+        {
+          label: "Ruido blanco N(0,1)",
+          data: data.series.values,
+          borderColor: "#111827",
+          backgroundColor: "#111827",
+          fill: false,
+        }
+      ];
+      whiteSeriesChart.update();
+
+      hqChart.data.datasets = [
+        {
+          label: "h(q)",
+          data: data.rows.map(row => ({ x: row.q, y: row.h })),
+          borderColor: "#4f46e5",
+          backgroundColor: "#4f46e5",
+          showLine: true,
+        },
+        {
+          label: "Referencia 0.5",
+          data: data.rows.map(row => ({ x: row.q, y: 0.5 })),
+          borderColor: "#6b7280",
+          backgroundColor: "#6b7280",
+          borderDash: [5, 4],
+          pointRadius: 0,
+          showLine: true,
+        }
+      ];
+      hqChart.update();
+
+      alphaChart.data.datasets = [
+        {
+          label: "alpha(q)",
+          data: data.rows.map(row => ({ x: row.q, y: row.holder_alpha })),
+          borderColor: "#0f766e",
+          backgroundColor: "#0f766e",
+          showLine: true,
+        },
+        {
+          label: "Referencia 0.5",
+          data: data.rows.map(row => ({ x: row.q, y: 0.5 })),
+          borderColor: "#6b7280",
+          backgroundColor: "#6b7280",
+          borderDash: [5, 4],
+          pointRadius: 0,
+          showLine: true,
+        }
+      ];
+      alphaChart.update();
+
+      const datasets = [];
+      data.fluctuations.forEach((item, index) => {
+        const color = palette[index % palette.length];
+        datasets.push({
+          label: `q=${fmt(item.q, 2)} puntos`,
+          data: item.points,
+          borderColor: color,
+          backgroundColor: color,
+          showLine: false,
+        });
+        datasets.push({
+          label: `q=${fmt(item.q, 2)} ajuste`,
+          data: item.fit,
+          borderColor: color,
+          backgroundColor: color,
+          pointRadius: 0,
+          showLine: true,
+        });
+      });
+      fluctuationChart.data.datasets = datasets;
+      fluctuationChart.update();
+
+      const tbody = document.querySelector("#mfdfaTable tbody");
+      tbody.innerHTML = "";
+      data.rows.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${fmt(row.q, 4)}</td>
+          <td>${fmt(row.h, 6)}</td>
+          <td>${fmt(row.tau, 6)}</td>
+          <td>${fmt(row.holder_alpha, 6)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function resetBetaView() {
+      document.getElementById("betaStatus").textContent = "Pendiente";
+      document.getElementById("betaStatusDetail").textContent = "Configura el barrido y ejecuta.";
+      document.getElementById("betaPoints").textContent = "-";
+      document.getElementById("betaEstimator").textContent = "-";
+      document.querySelector("#betaTable tbody").innerHTML = "";
+      document.getElementById("betaFiles").innerHTML = "";
+      if (betaChart) {
+        betaChart.data.datasets = [];
+        betaChart.update();
+      }
+    }
+
+    function resetMfdfaView() {
+      document.getElementById("mfdfaStatus").textContent = "Pendiente";
+      document.getElementById("mfdfaStatusDetail").textContent = "Listo para calcular ruido blanco.";
+      document.getElementById("hqZero").textContent = "-";
+      document.getElementById("alphaZero").textContent = "-";
+      document.getElementById("alphaTwo").textContent = "-";
+      document.querySelector("#mfdfaTable tbody").innerHTML = "";
+      document.getElementById("mfdfaFiles").innerHTML = "";
+      [whiteSeriesChart, hqChart, alphaChart, fluctuationChart].forEach(chart => {
+        if (chart) {
+          chart.data.labels = [];
+          chart.data.datasets = [];
+          chart.update();
+        }
+      });
+    }
+
+    document.getElementById("betaForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      document.getElementById("betaStatus").textContent = "Calculando...";
+      document.getElementById("betaStatusDetail").textContent = "Ejecutando realizaciones sinteticas.";
+      const response = await fetch("/process_beta_exponent", {
+        method: "POST",
+        body: new FormData(event.target)
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        document.getElementById("betaStatus").textContent = "Error";
+        return;
+      }
+      renderBeta(data);
+    });
+
+    document.getElementById("mfdfaForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      document.getElementById("mfdfaStatus").textContent = "Calculando...";
+      document.getElementById("mfdfaStatusDetail").textContent = "Estimando Fq(s), h(q) y exponente de Holder.";
+      const response = await fetch("/process_mfdfa", {
+        method: "POST",
+        body: new FormData(event.target)
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        document.getElementById("mfdfaStatus").textContent = "Error";
+        return;
+      }
+      renderMfdfa(data);
+    });
+
+    document.getElementById("resetBeta").addEventListener("click", () => {
+      document.getElementById("betaForm").reset();
+      resetBetaView();
+    });
+
+    document.getElementById("resetMfdfa").addEventListener("click", () => {
+      document.getElementById("mfdfaForm").reset();
+      resetMfdfaView();
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      ensureBetaChart();
+      ensureMfdfaCharts();
+    });
+  </script>
+</body>
+
+</html>

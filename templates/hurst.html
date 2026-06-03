@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Exponente de Hurst</title>
+  <title>Hurst, DFA e Higuchi</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -21,26 +21,26 @@
       <a href="/erdos_renyi" class="navLink {% if request.path == '/erdos_renyi' %}active{% endif %}">Erdos Renyi</a>
       <a href="/fractals" class="navLink {% if request.path == '/fractals' %}active{% endif %}">Fractals</a>
       <a href="/hurst" class="navLink {% if request.path == '/hurst' %}active{% endif %}">Hurst</a>
+      <a href="/beta_series" class="navLink {% if request.path == '/beta_series' %}active{% endif %}">Beta-Series / MF-DFA</a>
+      <a href="/mfdfa_articulo" class="navLink {% if request.path == '/mfdfa_articulo' %}active{% endif %}">MF-DFA articulo</a>
+      <a href="/animacion_charles" class="navLink {% if request.path == '/animacion_charles' %}active{% endif %}">Animacion Charles</a>
     </nav>
   </aside>
 
   <main class="main pageFade">
     <section class="card heroCard">
-      <span class="eyebrow">Movimiento Browniano</span>
-      <h1>Exponente de Hurst con la Ec. 19</h1>
+      <span class="eyebrow">Series de tiempo</span>
+      <h1>Hurst, DFA e Higuchi</h1>
       <p class="lead">
-        Esta vista estima el exponente de Hurst usando la relaci&oacute;n de autoafinidad
-        <code>f(x_0 + \lambda x) - f(x_0) \approx \lambda^H (f(x_0 + x) - f(x_0))</code>.
-        En la pr&aacute;ctica se ajusta la pendiente de <code>log std(X_{t+\lambda} - X_t)</code> contra
-        <code>log \lambda</code>. La validaci&oacute;n usa ruido blanco, donde el resultado debe acercarse a
-        <code>H \approx 0</code>.
+        Esta vista calcula dos estimadores de Hurst para VOO, NVDA y GAP en el mes calendario anterior:
+        Hurst con rango reescalado <code>R/S</code> y Hurst por escalamiento de incrementos.
+        Ademas, calcula DFA y la dimension fractal de Higuchi.
       </p>
       <div class="formulaStrip">
-        <div class="formulaChip"><strong>Estimador:</strong> <code>S(\lambda) = std(X_{t+\lambda} - X_t)</code></div>
-        <div class="formulaChip"><strong>Ajuste:</strong> <code>log S(\lambda) \approx H log \lambda + c</code></div>
-        <div class="formulaChip"><strong>Validaci&oacute;n:</strong>
-          <code>np.random.normal(0,1) -&gt; H \approx 0</code>
-        </div>
+        <div class="formulaChip"><strong>Hurst R/S:</strong> <code>R(n)/S(n) ~ c n^H</code></div>
+        <div class="formulaChip"><strong>Hurst incrementos:</strong> <code>std(X_{t+\lambda}-X_t) ~ \lambda^H</code></div>
+        <div class="formulaChip"><strong>DFA:</strong> <code>F(s) ~ s^alpha</code></div>
+        <div class="formulaChip"><strong>Higuchi:</strong> <code>L(k) ~ k^-D</code></div>
       </div>
     </section>
 
@@ -50,8 +50,9 @@
         <button type="button" id="resetHurst" class="secondary">Reset</button>
       </div>
       <div class="hint">
-        Si hoy estamos en abril, se descargan las series diarias de marzo. La serie de mercado se
-        muestra normalizada a base 100 solo para comparar trayectorias de instrumentos con precios distintos.
+        Se descargan cierres diarios del mes calendario anterior y se comparan con dos validaciones locales:
+        ruido blanco <code>np.random.normal(0,1)</code> y movimiento browniano
+        <code>cumsum(np.random.normal(0,1))</code>. El Hurst por incrementos se calcula, pero no se grafica abajo.
       </div>
     </form>
 
@@ -64,68 +65,145 @@
       <article class="card statCard">
         <div class="small">Series de mercado</div>
         <div class="statValue" id="seriesCount">-</div>
-        <div class="small">VOO, NVDA y Gap (GAP).</div>
+        <div class="small">VOO, NVDA y GAP.</div>
       </article>
       <article class="card statCard">
-        <div class="small">H ruido blanco</div>
-        <div class="statValue" id="whiteNoiseH">-</div>
-        <div class="small">Debe acercarse a 0.</div>
+        <div class="small">H R/S ruido blanco</div>
+        <div class="statValue" id="whiteNoiseHrs">-</div>
+        <div class="small">Referencia: 0.5.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">H inc. ruido blanco</div>
+        <div class="statValue" id="whiteNoiseHinc">-</div>
+        <div class="small">Referencia: 0.0.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">H R/S browniano</div>
+        <div class="statValue" id="brownianHrs">-</div>
+        <div class="small">Referencia: 1.0.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">H inc. browniano</div>
+        <div class="statValue" id="brownianHinc">-</div>
+        <div class="small">Referencia: 0.5.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">DFA ruido blanco</div>
+        <div class="statValue" id="whiteNoiseDfa">-</div>
+        <div class="small">Referencia: 0.5.</div>
+      </article>
+      <article class="card statCard">
+        <div class="small">DFA browniano</div>
+        <div class="statValue" id="brownianDfa">-</div>
+        <div class="small">Referencia: 1.5.</div>
       </article>
       <article class="card statCard">
         <div class="small">Estado</div>
         <div class="statValue" id="statusLabel">Pendiente</div>
-        <div class="small" id="statusDetail">Calcula la estimaci&oacute;n con la Ec. 19.</div>
+        <div class="small" id="statusDetail">Calcula dos Hurst, DFA e Higuchi.</div>
       </article>
     </section>
 
     <section class="card" id="warningCard" style="display:none;">
       <div class="sectionHeader">
         <h2>Avisos</h2>
-        <div class="small">Si alguna serie no pudo descargarse, aparecer&aacute; aqu&iacute;.</div>
+        <div class="small">Si alguna serie no pudo descargarse, aparecera aqui.</div>
       </div>
       <div id="warningBody" class="hint"></div>
     </section>
 
     <section class="card">
       <div class="sectionHeader">
-        <h2>Metodolog&iacute;a</h2>
-        <div class="tableWrap">
-          <table>
-            <tbody>
-              <tr>
-                <th>Fuente en tiempo real</th>
-                <td id="sourceName">Yahoo Finance</td>
-              </tr>
-              <tr>
-                <th>Endpoint</th>
-                <td id="sourceEndpoint">-</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <h2>Metodologia</h2>
+      </div>
+      <div class="tableWrap">
+        <table>
+          <tbody>
+            <tr>
+              <th>Fuente en tiempo real</th>
+              <td id="sourceName">Yahoo Finance</td>
+            </tr>
+            <tr>
+              <th>Endpoint</th>
+              <td id="sourceEndpoint">-</td>
+            </tr>
+            <tr>
+              <th>Validacion Hurst R/S</th>
+              <td id="hurstRsReference">Ruido blanco -> H aprox 0.5 con R/S | Browniano -> H aprox 1 con R/S</td>
+            </tr>
+            <tr>
+              <th>Validacion Hurst incrementos</th>
+              <td id="hurstIncReference">Ruido blanco -> H aprox 0 por incrementos | Browniano -> H aprox 0.5 por incrementos</td>
+            </tr>
+            <tr>
+              <th>Validacion DFA</th>
+              <td id="dfaReference">Ruido blanco -> alpha aprox 0.5 | Browniano -> alpha aprox 1.5</td>
+            </tr>
+            <tr>
+              <th>Validacion Higuchi</th>
+              <td id="higuchiReference">Ruido blanco -> D aprox 2 | Browniano -> D aprox 1.5</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="card">
       <div class="sectionHeader">
         <h2>Series financieras del mes anterior</h2>
-        <div class="small">Valores normalizados a base 100 para comparar la din&aacute;mica del mismo periodo.</div>
+        <div class="small">Valores normalizados a base 100 para comparar trayectorias del mismo periodo.</div>
       </div>
       <canvas id="marketChart"></canvas>
     </section>
 
-    <section class="card">
-      <div class="sectionHeader">
-        <h2>Validaci&oacute;n con ruido blanco</h2>
-        <div class="small">Serie simulada con <code>np.random.normal(0,1)</code>. Aqu&iacute; el exponente debe
-          acercarse a 0.</div>
-      </div>
-      <canvas id="noiseChart"></canvas>
+    <section class="erGrid">
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Ruido blanco</h2>
+          <div class="small">Validacion sintetica independiente con <code>np.random.normal(0,1)</code>.</div>
+        </div>
+        <canvas id="whiteNoiseChart"></canvas>
+      </article>
+
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Movimiento browniano</h2>
+          <div class="small">Validacion sintetica independiente con <code>cumsum(np.random.normal(0,1))</code>.</div>
+        </div>
+        <canvas id="brownianChart"></canvas>
+      </article>
+    </section>
+
+    <section class="erGrid">
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Plano log-log de Hurst R/S</h2>
+          <div class="small">Solo se grafica ruido blanco. Se usa <code>log(R(n)/S(n))</code> contra <code>log(n)</code>; la pendiente es <code>H</code>.</div>
+        </div>
+        <canvas id="hurstScalingChart"></canvas>
+      </article>
+
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Plano log-log de DFA</h2>
+          <div class="small">Solo se grafica ruido blanco. La pendiente de <code>log(F(s))</code> contra <code>log(s)</code> es <code>alpha</code>.</div>
+        </div>
+        <canvas id="dfaChart"></canvas>
+      </article>
+
+      <article class="card">
+        <div class="sectionHeader">
+          <h2>Plano log-log de Higuchi</h2>
+          <div class="small">Solo se grafica ruido blanco. La pendiente de <code>log(L(k))</code> contra <code>log(k)</code> es <code>-D</code>.</div>
+        </div>
+        <canvas id="higuchiChart"></canvas>
+      </article>
     </section>
 
     <section class="card">
       <div class="sectionHeader">
-        <h2>Tabla de exponentes de Hurst</h2>
-        <div class="small">Cada fila muestra la estimaci&oacute;n usando el ajuste log-log derivado de la Ec. 19.</div>
+        <h2>Tabla de resultados</h2>
+        <div class="small">Se muestran ambos Hurst, DFA e Higuchi para las series reales y las validaciones locales.</div>
       </div>
       <div class="tableWrap">
         <table id="hurstTable">
@@ -135,11 +213,12 @@
               <th>Ticker</th>
               <th>Periodo</th>
               <th>Observaciones</th>
-              <th>Primer valor</th>
-              <th>&Uacute;ltimo valor</th>
-              <th>H estimado</th>
+              <th>H R/S</th>
+              <th>H incrementos</th>
+              <th>DFA alpha</th>
+              <th>Higuchi D</th>
               <th>Referencia</th>
-              <th>Interpretaci&oacute;n</th>
+              <th>Lectura</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -151,47 +230,74 @@
   <script>
     const palette = ["#4f46e5", "#ef4444", "#10b981", "#f59e0b", "#06b6d4", "#8b5cf6"];
     let marketChart = null;
-    let noiseChart = null;
+    let whiteNoiseChart = null;
+    let brownianChart = null;
+    let hurstScalingChart = null;
+    let dfaChart = null;
+    let higuchiChart = null;
 
     function fmt(value, digits = 6) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
       return Number(value).toFixed(digits);
     }
 
-    function ensureCharts() {
-      if (!marketChart) {
-        marketChart = new Chart(document.getElementById("marketChart"), {
-          type: "line",
-          data: { labels: [], datasets: [] },
-          options: {
-            responsive: true,
-            interaction: { mode: "nearest", intersect: false },
-            scales: {
-              x: { title: { display: true, text: "Fecha" } },
-              y: { title: { display: true, text: "Base 100" } }
-            },
-            plugins: { legend: { position: "bottom" } },
-            elements: { point: { radius: 2 }, line: { tension: 0.15 } }
-          }
-        });
-      }
+    function ensureLineChart(canvasId, chartRef, xLabel, yLabel, pointRadius = 0) {
+      if (chartRef.current) return;
+      chartRef.current = new Chart(document.getElementById(canvasId), {
+        type: "line",
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          interaction: { mode: "nearest", intersect: false },
+          scales: {
+            x: { title: { display: true, text: xLabel } },
+            y: { title: { display: true, text: yLabel } }
+          },
+          plugins: { legend: { position: "bottom" } },
+          elements: { point: { radius: pointRadius }, line: { tension: 0.15 } }
+        }
+      });
+    }
 
-      if (!noiseChart) {
-        noiseChart = new Chart(document.getElementById("noiseChart"), {
-          type: "line",
-          data: { labels: [], datasets: [] },
-          options: {
-            responsive: true,
-            interaction: { mode: "nearest", intersect: false },
-            scales: {
-              x: { title: { display: true, text: "&Iacute;ndice" } },
-              y: { title: { display: true, text: "Valor" } }
-            },
-            plugins: { legend: { position: "bottom" } },
-            elements: { point: { radius: 0 }, line: { tension: 0.12 } }
+    function ensureScalingChart(canvasId, chartRef, xLabel, yLabel) {
+      if (chartRef.current) return;
+      chartRef.current = new Chart(document.getElementById(canvasId), {
+        type: "scatter",
+        data: { datasets: [] },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: "bottom" } },
+          scales: {
+            x: { type: "logarithmic", title: { display: true, text: xLabel } },
+            y: { type: "logarithmic", title: { display: true, text: yLabel } }
           }
-        });
-      }
+        }
+      });
+    }
+
+    function ensureCharts() {
+      ensureLineChart("marketChart", { current: marketChart }, "Fecha", "Base 100", 2);
+      marketChart = Chart.getChart("marketChart");
+
+      ensureLineChart("whiteNoiseChart", { current: whiteNoiseChart }, "Indice", "Valor");
+      whiteNoiseChart = Chart.getChart("whiteNoiseChart");
+
+      ensureLineChart("brownianChart", { current: brownianChart }, "Indice", "Valor");
+      brownianChart = Chart.getChart("brownianChart");
+
+      ensureScalingChart("hurstScalingChart", { current: hurstScalingChart }, "n", "R(n)/S(n)");
+      hurstScalingChart = Chart.getChart("hurstScalingChart");
+
+      ensureScalingChart("dfaChart", { current: dfaChart }, "s", "F(s)");
+      dfaChart = Chart.getChart("dfaChart");
+
+      ensureScalingChart("higuchiChart", { current: higuchiChart }, "k", "L(k)");
+      higuchiChart = Chart.getChart("higuchiChart");
+    }
+
+    function setScalingChart(chart, datasets) {
+      chart.data.datasets = datasets;
+      chart.update();
     }
 
     function renderWarnings(errors) {
@@ -207,20 +313,31 @@
     }
 
     function renderSummary(data) {
+      const white = data.validations.white_noise;
+      const brownian = data.validations.brownian;
       document.getElementById("periodLabel").textContent = data.period.label;
       document.getElementById("periodDates").textContent = `${data.period.start} a ${data.period.end_inclusive}`;
       document.getElementById("seriesCount").textContent = data.series_count;
-      document.getElementById("whiteNoiseH").textContent = fmt(data.validation.hurst, 6);
+      document.getElementById("whiteNoiseHrs").textContent = fmt(white.hurst_rs, 6);
+      document.getElementById("whiteNoiseHinc").textContent = fmt(white.hurst_increment, 6);
+      document.getElementById("brownianHrs").textContent = fmt(brownian.hurst_rs, 6);
+      document.getElementById("brownianHinc").textContent = fmt(brownian.hurst_increment, 6);
+      document.getElementById("whiteNoiseDfa").textContent = fmt(white.dfa_alpha, 6);
+      document.getElementById("brownianDfa").textContent = fmt(brownian.dfa_alpha, 6);
       document.getElementById("statusLabel").textContent = data.series_count > 0 ? "Completado" : "Solo validacion";
       document.getElementById("statusDetail").textContent =
         data.series_count > 0
-          ? "Se descargaron series reales y se calculo H."
-          : "No hubo series de mercado disponibles, pero la validacion local si corrio.";
+          ? "Se calcularon Hurst R/S, Hurst por incrementos, DFA e Higuchi."
+          : "No hubo series de mercado disponibles, pero las validaciones locales si corrieron.";
     }
 
     function renderMethodology(data) {
       document.getElementById("sourceName").textContent = data.source.name;
       document.getElementById("sourceEndpoint").textContent = `${data.source.endpoint} (${data.source.interval})`;
+      document.getElementById("hurstRsReference").textContent = `${data.references.hurst_rs_white} | ${data.references.hurst_rs_brownian}`;
+      document.getElementById("hurstIncReference").textContent = `${data.references.hurst_increment_white} | ${data.references.hurst_increment_brownian}`;
+      document.getElementById("dfaReference").textContent = `${data.references.dfa_white} | ${data.references.dfa_brownian}`;
+      document.getElementById("higuchiReference").textContent = `${data.references.higuchi_white} | ${data.references.higuchi_brownian}`;
     }
 
     function renderMarketChart(data) {
@@ -243,17 +360,84 @@
       marketChart.update();
     }
 
-    function renderNoiseChart(data) {
+    function renderValidationSeries(chart, validation, color) {
       ensureCharts();
-      noiseChart.data.labels = data.validation.index;
-      noiseChart.data.datasets = [{
-        label: `${data.validation.label} (H = ${fmt(data.validation.hurst, 6)})`,
-        data: data.validation.series,
-        borderColor: "#111827",
-        backgroundColor: "#111827",
-        fill: false,
-      }];
-      noiseChart.update();
+      chart.data.labels = validation.index;
+      chart.data.datasets = [
+        {
+          label: `${validation.label} | H R/S = ${fmt(validation.hurst_rs, 6)} | H inc = ${fmt(validation.hurst_increment, 6)}`,
+          data: validation.series,
+          borderColor: color,
+          backgroundColor: color,
+          fill: false,
+        }
+      ];
+      chart.update();
+    }
+
+    function renderScalingCharts(data) {
+      ensureCharts();
+      const white = data.validations.white_noise;
+
+      setScalingChart(hurstScalingChart, [
+        {
+          label: `Ruido blanco H R/S = ${fmt(white.hurst_rs, 6)}`,
+          data: white.hurst_rs_scaling.points,
+          borderColor: "#1d4ed8",
+          backgroundColor: "#1d4ed8",
+          showLine: false,
+          pointRadius: 3,
+        },
+        {
+          label: "Ajuste H R/S sobre ruido blanco",
+          data: white.hurst_rs_scaling.fit,
+          borderColor: "#1d4ed8",
+          backgroundColor: "#1d4ed8",
+          showLine: true,
+          pointRadius: 0,
+          borderWidth: 2,
+        }
+      ]);
+
+      setScalingChart(dfaChart, [
+        {
+          label: `Ruido blanco alpha = ${fmt(white.dfa_alpha, 6)}`,
+          data: white.dfa_scaling.points,
+          borderColor: "#0f766e",
+          backgroundColor: "#0f766e",
+          showLine: false,
+          pointRadius: 3,
+        },
+        {
+          label: "Ajuste DFA sobre ruido blanco",
+          data: white.dfa_scaling.fit,
+          borderColor: "#0f766e",
+          backgroundColor: "#0f766e",
+          showLine: true,
+          pointRadius: 0,
+          borderWidth: 2,
+        }
+      ]);
+
+      setScalingChart(higuchiChart, [
+        {
+          label: `Ruido blanco D = ${fmt(white.higuchi_dimension, 6)}`,
+          data: white.higuchi_scaling.points,
+          borderColor: "#b45309",
+          backgroundColor: "#b45309",
+          showLine: false,
+          pointRadius: 3,
+        },
+        {
+          label: "Ajuste Higuchi sobre ruido blanco",
+          data: white.higuchi_scaling.fit,
+          borderColor: "#b45309",
+          backgroundColor: "#b45309",
+          showLine: true,
+          pointRadius: 0,
+          borderWidth: 2,
+        }
+      ]);
     }
 
     function renderTable(data) {
@@ -267,53 +451,61 @@
           <td>${series.symbol}</td>
           <td>${data.period.label}</td>
           <td>${series.points}</td>
-          <td>${fmt(series.first_close, 4)}</td>
-          <td>${fmt(series.last_close, 4)}</td>
-          <td>${fmt(series.hurst, 6)}</td>
+          <td>${fmt(series.hurst_rs, 6)}</td>
+          <td>${fmt(series.hurst_increment, 6)}</td>
+          <td>${fmt(series.dfa_alpha, 6)}</td>
+          <td>${fmt(series.higuchi_dimension, 6)}</td>
           <td>Serie real del mercado</td>
-          <td>${series.interpretation}</td>
+          <td>H R/S: ${series.hurst_rs_interpretation} | H inc: ${series.hurst_increment_interpretation} | DFA: ${series.dfa_interpretation} | Higuchi: ${series.higuchi_interpretation}</td>
         `;
         tbody.appendChild(tr);
       });
 
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${data.validation.label}</td>
-        <td>${data.validation.symbol}</td>
-        <td>Validacion local</td>
-        <td>${data.validation.points}</td>
-        <td>-</td>
-        <td>-</td>
-        <td>${fmt(data.validation.hurst, 6)}</td>
-        <td>H ~ 0</td>
-        <td>${data.validation.interpretation}</td>
-      `;
-      tbody.appendChild(tr);
+      [data.validations.white_noise, data.validations.brownian].forEach((validation) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${validation.label}</td>
+          <td>${validation.symbol}</td>
+          <td>Validacion local</td>
+          <td>${validation.points}</td>
+          <td>${fmt(validation.hurst_rs, 6)}</td>
+          <td>${fmt(validation.hurst_increment, 6)}</td>
+          <td>${fmt(validation.dfa_alpha, 6)}</td>
+          <td>${fmt(validation.higuchi_dimension, 6)}</td>
+          <td>H R/S aprox ${fmt(validation.expected_hurst_rs, 3)} | H inc aprox ${fmt(validation.expected_hurst_increment, 3)} | alpha aprox ${fmt(validation.expected_dfa_alpha, 3)} | D aprox ${fmt(validation.expected_higuchi_dimension, 3)}</td>
+          <td>${validation.hurst_rs_interpretation} | ${validation.hurst_increment_interpretation} | ${validation.dfa_interpretation} | ${validation.higuchi_interpretation}</td>
+        `;
+        tbody.appendChild(tr);
+      });
     }
 
     function resetView() {
       document.getElementById("periodLabel").textContent = "-";
       document.getElementById("periodDates").textContent = "Listo para calcular.";
       document.getElementById("seriesCount").textContent = "-";
-      document.getElementById("whiteNoiseH").textContent = "-";
+      document.getElementById("whiteNoiseHrs").textContent = "-";
+      document.getElementById("whiteNoiseHinc").textContent = "-";
+      document.getElementById("brownianHrs").textContent = "-";
+      document.getElementById("brownianHinc").textContent = "-";
+      document.getElementById("whiteNoiseDfa").textContent = "-";
+      document.getElementById("brownianDfa").textContent = "-";
       document.getElementById("statusLabel").textContent = "Pendiente";
-      document.getElementById("statusDetail").textContent = "Calcula la estimacion con la Ec. 19.";
+      document.getElementById("statusDetail").textContent = "Calcula dos Hurst, DFA e Higuchi.";
       document.getElementById("sourceName").textContent = "Yahoo Finance";
       document.getElementById("sourceEndpoint").textContent = "-";
+      document.getElementById("hurstRsReference").textContent = "Ruido blanco -> H aprox 0.5 con R/S | Browniano -> H aprox 1 con R/S";
+      document.getElementById("hurstIncReference").textContent = "Ruido blanco -> H aprox 0 por incrementos | Browniano -> H aprox 0.5 por incrementos";
+      document.getElementById("dfaReference").textContent = "Ruido blanco -> alpha aprox 0.5 | Browniano -> alpha aprox 1.5";
+      document.getElementById("higuchiReference").textContent = "Ruido blanco -> D aprox 2 | Browniano -> D aprox 1.5";
       document.querySelector("#hurstTable tbody").innerHTML = "";
       renderWarnings([]);
 
-      if (marketChart) {
-        marketChart.data.labels = [];
-        marketChart.data.datasets = [];
-        marketChart.update();
-      }
-
-      if (noiseChart) {
-        noiseChart.data.labels = [];
-        noiseChart.data.datasets = [];
-        noiseChart.update();
-      }
+      ensureCharts();
+      [marketChart, whiteNoiseChart, brownianChart, hurstScalingChart, dfaChart, higuchiChart].forEach((chart) => {
+        chart.data.labels = [];
+        chart.data.datasets = [];
+        chart.update();
+      });
     }
 
     async function loadHurst() {
@@ -325,7 +517,9 @@
       renderMethodology(data);
       renderWarnings(data.errors);
       renderMarketChart(data);
-      renderNoiseChart(data);
+      renderValidationSeries(whiteNoiseChart, data.validations.white_noise, "#111827");
+      renderValidationSeries(brownianChart, data.validations.brownian, "#4f46e5");
+      renderScalingCharts(data);
       renderTable(data);
     }
 
@@ -339,6 +533,7 @@
     });
 
     document.addEventListener("DOMContentLoaded", async () => {
+      ensureCharts();
       await loadHurst();
     });
   </script>

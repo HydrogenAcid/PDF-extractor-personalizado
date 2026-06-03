@@ -1,0 +1,386 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+
+\geometry{margin=2.5cm}
+
+\title{Reporte del Módulo de Cálculo de Hurst, DFA e Higuchi}
+\author{Nombre del estudiante}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introducción}
+
+En esta práctica se implementó una ventana dentro de la aplicación web para analizar series de tiempo financieras mediante cuatro métricas:
+
+\begin{itemize}
+    \item exponente de Hurst con rango reescalado,
+    \item exponente de Hurst por escalamiento de incrementos,
+    \item exponente DFA,
+    \item dimensión fractal de Higuchi.
+\end{itemize}
+
+La pestaña trabaja con las series del mes calendario anterior para los activos VOO, NVDA y GAP. Además, incluye validaciones sintéticas independientes con ruido blanco y movimiento browniano.
+
+\section{Objetivo}
+
+El objetivo del módulo es estimar dos versiones del exponente de Hurst y compararlas con DFA e Higuchi sobre series de tiempo reales y sintéticas.
+
+En particular:
+
+\begin{enumerate}
+    \item se implementó el cálculo de Hurst con el método de rango reescalado \(R/S\),
+    \item se implementó el cálculo de Hurst por escalamiento de incrementos,
+    \item se implementó DFA,
+    \item se implementó la dimensión fractal de Higuchi,
+    \item se aplicó el análisis a datos financieros reales,
+    \item se incorporaron validaciones con ruido blanco y movimiento browniano.
+\end{enumerate}
+
+\section{Fundamento teórico}
+
+\subsection{Hurst con rango reescalado}
+
+En la versión final de la pestaña, el primer estimador de Hurst se calcula con el método clásico de rango reescalado.
+
+Sea una serie \(X_1, X_2, \dots, X_n\). Primero se calcula el promedio:
+
+\[
+\bar X_n = \frac{1}{n}\sum_{i=1}^{n} X_i
+\]
+
+Luego se construye el perfil acumulado:
+
+\[
+Y(k)=\sum_{i=1}^{k}\bigl(X_i-\bar X_n\bigr), \qquad 1\le k\le n
+\]
+
+El rango del perfil es:
+
+\[
+R(n)=\max_{1\le k\le n} Y(k)-\min_{1\le k\le n} Y(k)
+\]
+
+La desviación estándar se define como:
+
+\[
+S(n)=\sqrt{\frac{1}{n}\sum_{i=1}^{n}\bigl(X_i-\bar X_n\bigr)^2}
+\]
+
+La ley de escalamiento usada es:
+
+\[
+\frac{R(n)}{S(n)} \sim c\, n^H
+\]
+
+Tomando logaritmos:
+
+\[
+\log\!\left(\frac{R(n)}{S(n)}\right)=\log c + H \log n
+\]
+
+Por lo tanto, el valor de \(H\) se obtiene como la pendiente del plano log-log:
+
+\[
+\log\!\left(\frac{R(n)}{S(n)}\right)
+\quad \text{vs} \quad
+\log n
+\]
+
+\subsection{Hurst por escalamiento de incrementos}
+
+El segundo estimador de Hurst corresponde al primer método que se había construido en la práctica. En este caso se toma la serie \(X_t\) y se define:
+
+\[
+S(\lambda)=\mathrm{std}(X_{t+\lambda}-X_t)
+\]
+
+\[
+S(\lambda)\propto \lambda^H
+\]
+
+\[
+\log S(\lambda)= H \log \lambda + C
+\]
+
+La pendiente en el plano log-log permite estimar el segundo valor de \(H\). Este estimador sí se calcula para todas las series y validaciones, pero no se grafica en la parte inferior de la ventana final.
+
+\subsection{Detrended Fluctuation Analysis}
+
+El DFA se implementó siguiendo los pasos estándar.
+
+Primero se integra la serie:
+
+\[
+Y(i)=\sum_{j=1}^{i}(X_j-\bar X)
+\]
+
+Luego se divide el perfil en ventanas de tamaño \(s\), sin traslape:
+
+\[
+N_s = \frac{N}{s}
+\]
+
+En cada ventana se ajusta una tendencia local lineal y se calcula:
+
+\[
+F_s^2=\frac{1}{s}\sum_{i=1}^{s}\bigl(Y_i-Y_i^{fit}\bigr)^2
+\]
+
+Posteriormente:
+
+\[
+F(s)=\sqrt{\frac{1}{N_s}\sum F_s^2}
+\]
+
+La ley de escalamiento es:
+
+\[
+F(s)\sim s^\alpha
+\]
+
+y por tanto:
+
+\[
+\log F(s)=\alpha \log s + C
+\]
+
+La pendiente de la recta en el plano log-log corresponde al exponente DFA.
+
+\subsection{Dimensión fractal de Higuchi}
+
+Para una serie \(X_t\), se define:
+
+\[
+X_k^m=\{X(m),X(m+k),X(m+2k),\dots,X(m+\lfloor (N-m)/k \rfloor k)\}
+\]
+
+La longitud asociada a cada \(m\) y \(k\) es:
+
+\[
+L_m(k)=
+\frac{N-1}{\left\lfloor \frac{N-m}{k}\right\rfloor k^2}
+\sum_{i=1}^{\left\lfloor \frac{N-m}{k}\right\rfloor}
+\left|X(m+ik)-X(m+(i-1)k)\right|
+\]
+
+Promediando sobre \(m\):
+
+\[
+L(k)=\frac{1}{k}\sum_{m=1}^{k}L_m(k)
+\]
+
+La ley de escalamiento es:
+
+\[
+L(k)\propto k^{-D}
+\]
+
+y entonces:
+
+\[
+\log L(k)= -D\,\log k + C
+\]
+
+La dimensión de Higuchi se obtiene como el negativo de la pendiente.
+
+\section{Descripción del código implementado}
+
+El módulo fue implementado principalmente en el archivo \texttt{hurst.py} y su interfaz visual en \texttt{templates/hurst.html}. El flujo general del código es el siguiente.
+
+\subsection{1. Selección automática del periodo}
+
+El programa calcula automáticamente el mes calendario anterior a la fecha actual. Esto permite trabajar siempre con un periodo reciente sin necesidad de introducir fechas manualmente.
+
+\subsection{2. Descarga de datos en tiempo real}
+
+Las series financieras se obtienen desde Yahoo Finance mediante su endpoint de tipo \texttt{chart}. En esta implementación se usan:
+
+\begin{itemize}
+    \item VOO,
+    \item NVDA,
+    \item GAP.
+\end{itemize}
+
+\subsection{3. Estimación de Hurst}
+
+Para cada serie se calculan dos exponentes de Hurst:
+
+\begin{enumerate}
+    \item Hurst con rango reescalado \(R/S\),
+    \item Hurst por escalamiento de incrementos.
+\end{enumerate}
+
+El primero es el que se usa en la gráfica log-log inferior. El segundo se reporta numéricamente en las tarjetas resumen y en la tabla de resultados.
+
+\subsection{4. Validaciones sintéticas}
+
+El sistema genera dos validaciones:
+
+\begin{itemize}
+    \item ruido blanco con \texttt{np.random.normal(0,1)},
+    \item movimiento browniano con \texttt{cumsum(np.random.normal(0,1))}.
+\end{itemize}
+
+Estas dos series se usan para validar ambos estimadores de Hurst, además de DFA e Higuchi.
+
+\subsection{5. Cálculo de DFA e Higuchi}
+
+Sobre las mismas series también se calculan:
+
+\begin{itemize}
+    \item el exponente DFA,
+    \item la dimensión fractal de Higuchi.
+\end{itemize}
+
+\subsection{6. Visualización en la página web}
+
+La ventana de Hurst hace lo siguiente:
+
+\begin{itemize}
+    \item muestra el periodo analizado,
+    \item grafica las series financieras del mes anterior,
+    \item grafica en ventanas independientes el ruido blanco y el movimiento browniano,
+    \item muestra abajo solo el plano log-log de Hurst \(R/S\),
+    \item muestra abajo el plano log-log de DFA,
+    \item muestra abajo el plano log-log de Higuchi,
+    \item construye una tabla con ambos Hurst, DFA e Higuchi.
+\end{itemize}
+
+\section{Funciones principales del módulo}
+
+A nivel lógico, el código se organiza en estas partes:
+
+\begin{enumerate}
+    \item \texttt{previous\_calendar\_month}: determina el mes anterior automáticamente.
+    \item \texttt{fetch\_yahoo\_daily\_series}: descarga los cierres diarios desde Yahoo Finance.
+    \item \texttt{estimate\_hurst\_rs}: calcula \(H\) usando rango reescalado.
+    \item \texttt{estimate\_hurst\_increment\_scaling}: calcula \(H\) por incrementos.
+    \item \texttt{estimate\_dfa}: calcula el exponente \(\alpha\).
+    \item \texttt{estimate\_higuchi\_dimension}: calcula la dimensión \(D\).
+    \item \texttt{build\_white\_noise\_validation}: genera la validación con ruido blanco.
+    \item \texttt{build\_brownian\_validation}: genera la validación con movimiento browniano.
+    \item \texttt{build\_market\_payload}: reúne los datos de mercado y de validación.
+    \item \texttt{register\_hurst}: registra las rutas \texttt{/hurst} y \texttt{/process\_hurst}.
+\end{enumerate}
+
+\section{Qué hace la ventana de Hurst}
+
+La ventana nueva de la aplicación cumple con los siguientes objetivos:
+
+\begin{itemize}
+    \item cargar automáticamente información reciente del mercado,
+    \item mostrar visualmente la evolución temporal de VOO, NVDA y GAP,
+    \item calcular dos exponentes de Hurst para cada serie,
+    \item comparar los resultados con ruido blanco y movimiento browniano,
+    \item mostrar solo el Hurst \(R/S\) en la gráfica inferior,
+    \item dejar el Hurst por incrementos como valor numérico no graficado.
+\end{itemize}
+
+\section{Resultados esperados}
+
+Si la implementación es correcta, entonces:
+
+\begin{itemize}
+    \item con \(R/S\), el ruido blanco debe acercarse a \(H \approx 0.5\),
+    \item con \(R/S\), el movimiento browniano debe acercarse a \(H \approx 1\),
+    \item con el método por incrementos, el ruido blanco debe acercarse a \(H \approx 0\),
+    \item con el método por incrementos, el movimiento browniano debe acercarse a \(H \approx 0.5\),
+    \item para DFA, el ruido blanco debe acercarse a \(\alpha \approx 0.5\),
+    \item para DFA, el movimiento browniano debe acercarse a \(\alpha \approx 1.5\),
+    \item para Higuchi, el ruido blanco debe acercarse a \(D \approx 2\),
+    \item para Higuchi, el movimiento browniano debe acercarse a \(D \approx 1.5\).
+\end{itemize}
+
+En muestras finitas pueden aparecer pequeñas desviaciones, pero la tendencia general debe respetar esas referencias.
+
+\section{Espacios para capturas}
+
+\subsection{Ventana completa del módulo}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0pt}{7cm}\rule{0.9\linewidth}{0pt}}
+    \caption{Vista general de la pestaña de Hurst, DFA e Higuchi.}
+\end{figure}
+
+\subsection{Series financieras del mes anterior}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0pt}{7cm}\rule{0.9\linewidth}{0pt}}
+    \caption{Series financieras de VOO, NVDA y GAP.}
+\end{figure}
+
+\subsection{Ruido blanco}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0pt}{7cm}\rule{0.9\linewidth}{0pt}}
+    \caption{Ventana independiente para la validación con ruido blanco.}
+\end{figure}
+
+\subsection{Movimiento browniano}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0pt}{7cm}\rule{0.9\linewidth}{0pt}}
+    \caption{Ventana independiente para la validación con movimiento browniano.}
+\end{figure}
+
+\subsection{Plano log-log de Hurst \(R/S\)}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0pt}{7cm}\rule{0.9\linewidth}{0pt}}
+    \caption{Plano log-log de \(\log(R/S)\) contra \(\log(n)\), donde la pendiente es \(H\).}
+\end{figure}
+
+\subsection{Plano log-log de DFA}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0pt}{7cm}\rule{0.9\linewidth}{0pt}}
+    \caption{Plano log-log para DFA sobre ruido blanco.}
+\end{figure}
+
+\subsection{Plano log-log de Higuchi}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0pt}{7cm}\rule{0.9\linewidth}{0pt}}
+    \caption{Plano log-log para la dimensión de Higuchi sobre ruido blanco.}
+\end{figure}
+
+\subsection{Tabla final}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0pt}{6cm}\rule{0.9\linewidth}{0pt}}
+    \caption{Tabla con Hurst \(R/S\), Hurst por incrementos, DFA e Higuchi para mercado y validaciones sintéticas.}
+\end{figure}
+
+\section{Conclusión}
+
+La ventana desarrollada permite estudiar memoria, persistencia y rugosidad de series de tiempo reales y sintéticas desde un mismo entorno web. El módulo integra descarga automática de datos, cálculo de dos exponentes de Hurst, validaciones con ruido blanco y browniano, y visualización en gráficas y tablas.
+
+En particular, el sistema permite corroborar de forma directa que:
+
+\begin{itemize}
+    \item el método \(R/S\) estima \(H\) como la pendiente del plano \(\log(R/S)\) contra \(\log(n)\),
+    \item el método por incrementos recupera la validación con ruido blanco cercana a \(H \approx 0\),
+    \item DFA distingue entre ruido blanco y browniano,
+    \item Higuchi distingue la rugosidad entre ambos procesos.
+\end{itemize}
+
+\end{document}

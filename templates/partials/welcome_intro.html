@@ -1,0 +1,116 @@
+<!-- Pantalla inicial institucional: se integra solo en la entrada principal. -->
+<section class="welcomeIntro" id="welcomeIntro" aria-label="Pantalla de bienvenida">
+  <canvas class="welcomeIntroNetworkCanvas" id="welcomeIntroNetworkCanvas" aria-hidden="true"></canvas>
+  <div class="welcomeIntroGrid" aria-hidden="true"></div>
+  <div class="welcomeIntroHalo" aria-hidden="true"></div>
+
+  <div class="welcomeIntroPanel">
+    <figure class="welcomeLogoCard">
+      <img
+        src="/assets/logo.jpeg"
+        alt="Logo de Sistemas Complejos"
+        onerror="this.hidden=true; this.nextElementSibling.hidden=false;"
+      >
+      <figcaption class="welcomeLogoFallback" hidden>Sistemas Complejos</figcaption>
+    </figure>
+
+    <p class="welcomeIntroKicker">System Complex Lab</p>
+    <h1>Bienvenido</h1>
+    <p class="welcomeIntroTitle">Metodolog&iacute;as de los Sistemas Complejos y Fractales</p>
+    <p class="welcomeIntroAuthor">Autor: &Aacute;cido de Hidr&oacute;geno</p>
+
+    <button type="button" class="welcomeIntroButton" id="welcomeIntroEnter">Entrar</button>
+  </div>
+</section>
+
+<script>
+  (() => {
+    const intro = document.getElementById("welcomeIntro");
+    const enter = document.getElementById("welcomeIntroEnter");
+    const canvas = document.getElementById("welcomeIntroNetworkCanvas");
+    if (!intro || !enter) return;
+
+    let animationFrame = null;
+
+    const dismissIntro = () => {
+      if (intro.classList.contains("welcomeIntroLeaving")) return;
+      intro.classList.add("welcomeIntroLeaving");
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      window.setTimeout(() => intro.remove(), 700);
+    };
+
+    enter.addEventListener("click", dismissIntro);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") dismissIntro();
+    });
+    window.setTimeout(dismissIntro, 7600);
+
+    if (!canvas || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const context = canvas.getContext("2d");
+    const nodes = Array.from({ length: 34 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      vx: (Math.random() - 0.5) * 0.00055,
+      vy: (Math.random() - 0.5) * 0.00055,
+      radius: 1.6 + Math.random() * 2.4
+    }));
+
+    const resizeCanvas = () => {
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(window.innerWidth * ratio);
+      canvas.height = Math.floor(window.innerHeight * ratio);
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    };
+
+    const drawNetwork = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      context.clearRect(0, 0, width, height);
+
+      nodes.forEach((node) => {
+        node.x += node.vx;
+        node.y += node.vy;
+        if (node.x < 0.03 || node.x > 0.97) node.vx *= -1;
+        if (node.y < 0.05 || node.y > 0.95) node.vy *= -1;
+      });
+
+      for (let i = 0; i < nodes.length; i += 1) {
+        for (let j = i + 1; j < nodes.length; j += 1) {
+          const first = nodes[i];
+          const second = nodes[j];
+          const dx = (first.x - second.x) * width;
+          const dy = (first.y - second.y) * height;
+          const distance = Math.hypot(dx, dy);
+          if (distance < 190) {
+            const alpha = (1 - distance / 190) * 0.26;
+            context.strokeStyle = `rgba(125, 211, 252, ${alpha})`;
+            context.lineWidth = 1;
+            context.beginPath();
+            context.moveTo(first.x * width, first.y * height);
+            context.lineTo(second.x * width, second.y * height);
+            context.stroke();
+          }
+        }
+      }
+
+      nodes.forEach((node) => {
+        context.fillStyle = "rgba(219, 234, 254, 0.72)";
+        context.shadowColor = "rgba(56, 189, 248, 0.55)";
+        context.shadowBlur = 14;
+        context.beginPath();
+        context.arc(node.x * width, node.y * height, node.radius, 0, Math.PI * 2);
+        context.fill();
+        context.shadowBlur = 0;
+      });
+
+      animationFrame = window.requestAnimationFrame(drawNetwork);
+    };
+
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+    drawNetwork();
+  })();
+</script>

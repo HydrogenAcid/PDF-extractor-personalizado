@@ -1,0 +1,1 @@
+"""Componentes auxiliares de interfaz."""

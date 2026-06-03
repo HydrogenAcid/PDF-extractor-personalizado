@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Animacion Charles</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="layout">
+  <aside class="sidebar">
+    <div class="brand">Analizador</div>
+    <nav class="nav">
+      <a href="/" class="navLink {% if request.path == '/' %}active{% endif %}">Zipf + Shannon</a>
+      <a href="/vocales" class="navLink {% if request.path == '/vocales' %}active{% endif %}">Vocales</a>
+      <a href="/grafo_texto" class="navLink {% if request.path == '/grafo_texto' %}active{% endif %}">Grafos</a>
+      <a href="/small_world" class="navLink {% if request.path == '/small_world' %}active{% endif %}">Small-World</a>
+      <a href="/erdos_renyi" class="navLink {% if request.path == '/erdos_renyi' %}active{% endif %}">Erdos Renyi</a>
+      <a href="/fractals" class="navLink {% if request.path == '/fractals' %}active{% endif %}">Fractals</a>
+      <a href="/hurst" class="navLink {% if request.path == '/hurst' %}active{% endif %}">Hurst</a>
+      <a href="/beta_series" class="navLink {% if request.path == '/beta_series' %}active{% endif %}">Beta-Series / MF-DFA</a>
+      <a href="/mfdfa_articulo" class="navLink {% if request.path == '/mfdfa_articulo' %}active{% endif %}">MF-DFA articulo</a>
+      <a href="/animacion_charles" class="navLink {% if request.path == '/animacion_charles' %}active{% endif %}">Animacion Charles</a>
+    </nav>
+  </aside>
+
+  <main class="main pageFade">
+    <section class="card heroCard">
+      <span class="eyebrow">Redes complejas</span>
+      <h1>Animacion Charles</h1>
+    </section>
+
+    <section class="card">
+      <div class="networkFigureFrame animationFrameWrap">
+        <img id="charlesFrame" class="networkFigureImage animationFrameImage" alt="Frame de la animacion Charles">
+        <div id="charlesPlaceholder" class="networkPlaceholder">Cargando animacion...</div>
+      </div>
+      <div class="animationControlBar">
+        <button type="button" id="prevFrameBtn" class="secondary">Anterior</button>
+        <div class="small" id="frameLabel">Frame -</div>
+        <button type="button" id="nextFrameBtn" class="secondary">Siguiente</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let frames = [];
+    let currentFrameIndex = 0;
+    let playbackTimer = null;
+    let playbackIntervalMs = 375;
+    let cacheKey = "0";
+
+    function stopPlayback() {
+      if (playbackTimer !== null) {
+        clearInterval(playbackTimer);
+        playbackTimer = null;
+      }
+    }
+
+    function resetView() {
+      stopPlayback();
+      frames = [];
+      currentFrameIndex = 0;
+
+      const img = document.getElementById("charlesFrame");
+      img.removeAttribute("src");
+      img.style.display = "none";
+      document.getElementById("charlesPlaceholder").style.display = "flex";
+      document.getElementById("frameLabel").textContent = "Frame -";
+    }
+
+    function showFrame(index) {
+      if (!frames.length) return;
+      currentFrameIndex = Math.max(0, Math.min(index, frames.length - 1));
+      const frame = frames[currentFrameIndex];
+      const img = document.getElementById("charlesFrame");
+      img.src = `${frame.url}?v=${cacheKey}`;
+      img.style.display = "block";
+      document.getElementById("charlesPlaceholder").style.display = "none";
+      document.getElementById("frameLabel").textContent = `Frame ${String(frame.index).padStart(3, "0")} | t = ${frame.time}`;
+    }
+
+    function preloadFrames() {
+      frames.forEach((frame) => {
+        const preloaded = new Image();
+        preloaded.src = `${frame.url}?v=${cacheKey}`;
+      });
+    }
+
+    function startPlayback() {
+      stopPlayback();
+      if (frames.length <= 1) return;
+      playbackTimer = setInterval(() => {
+        const nextIndex = (currentFrameIndex + 1) % frames.length;
+        showFrame(nextIndex);
+      }, playbackIntervalMs);
+    }
+
+    async function loadAnimation(force = false) {
+      stopPlayback();
+      const formData = new FormData();
+      formData.append("force", force ? "1" : "0");
+
+      const response = await fetch("/process_animacion_charles", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      frames = data.frames;
+      playbackIntervalMs = data.playback_interval_ms || 375;
+      cacheKey = data.cache_key || String(Date.now());
+      preloadFrames();
+      showFrame(0);
+      startPlayback();
+    }
+
+    document.getElementById("prevFrameBtn").addEventListener("click", () => {
+      showFrame(currentFrameIndex - 1);
+      startPlayback();
+    });
+
+    document.getElementById("nextFrameBtn").addEventListener("click", () => {
+      showFrame(currentFrameIndex + 1);
+      startPlayback();
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopPlayback();
+      } else if (frames.length) {
+        startPlayback();
+      }
+    });
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await loadAnimation(false);
+    });
+  </script>
+</body>
+</html>
